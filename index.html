@@ -279,11 +279,12 @@ function parsearJSON(texto){
   }
 }
 
-async function iaJSON(prompt, maxTokens){
-  const texto = await gemini(
-    [{text:prompt}],
-    {temperature:0.4, maxOutputTokens:maxTokens||3072, responseMimeType:'application/json'}
-  );
+let ULTIMA_RESPUESTA_CRUDA='';
+async function iaJSON(prompt, maxTokens, sinJsonMime){
+  const cfg={temperature:0.4, maxOutputTokens:maxTokens||3072};
+  if(!sinJsonMime) cfg.responseMimeType='application/json';
+  const texto = await gemini([{text:prompt}], cfg);
+  ULTIMA_RESPUESTA_CRUDA=texto;
   return parsearJSON(texto);
 }
 
@@ -689,17 +690,18 @@ function renderNueva(err){
     vista={tipo:'generando',msg:'Leyendo tus apuntes y armando el plan…'};render();
     try{
       const m={id:'m'+Date.now(),nombre,fecha,objetivo};
-      let plan=null;
+      let plan=null, ultimoCrudo='';
       for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
-        const p=await iaJSON(pPlan(m,apuntes),3072);
-        // exigir estructura completa: varias unidades con lección+quiz
+        const p=await iaJSON(pPlan(m,apuntes),4096,true); // sin JSON-mime forzado
+        ultimoCrudo=ULTIMA_RESPUESTA_CRUDA;
         const unidades=(p&&p.unidades)||[];
         const conNodos=unidades.filter(u=>u.nodos&&u.nodos.length);
-        const temáticas=conNodos.filter(u=>u.nodos.length>=2||(u.nodos[0]&&u.nodos[0].tipo!=='simulacro'));
-        if(conNodos.length>=3 && temáticas.length>=2){ plan=p; break; }
-        // vino pobre: reintentar
+        if(unidades.length>=3 && conNodos.length>=3){ plan=p; break; }
       }
-      if(!plan) throw new Error('La IA devolvió un plan demasiado corto. Reintentá (a veces resume de más), o agregá más contenido en los apuntes.');
+      if(!plan){
+        const muestra=(ultimoCrudo||'(vacío)').slice(0,300);
+        throw new Error('La IA devolvió un plan corto. Esto es lo que respondió: '+muestra);
+      }
       materias.push(m);
       J.set('et:materias',materias);
       guardarMateria(m.id,{apuntes:recortar(apuntes,60000),plan,completados:{},contenido:{},usadas:{}});
