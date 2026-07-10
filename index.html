@@ -316,10 +316,19 @@ Apuntes del estudiante:
 ${recortar(apuntes)}
 ---
 
-Armá un plan de estudio de 4 a 6 unidades temáticas basadas SOLO en los apuntes, en el orden lógico para estudiar. Cada unidad tiene exactamente 2 nodos: una lección y un quiz. Al final agregá una unidad "Recta final" con un único nodo tipo "simulacro".
+IMPORTANTE: dividí el material en MÍNIMO 4 y máximo 6 unidades temáticas distintas (NO lo resumas en una sola unidad). Recorré TODOS los temas de los apuntes y agrupalos en unidades en orden lógico de estudio. Cada unidad temática DEBE tener exactamente 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
 
-Respondé SOLO con este JSON:
-{"unidades":[{"titulo":"máx 6 palabras","nodos":[{"tipo":"leccion","titulo":"máx 7 palabras","temas":"temas puntuales que cubre, máx 15 palabras"},{"tipo":"quiz","titulo":"máx 7 palabras","temas":"..."}]},...,{"titulo":"Recta final","nodos":[{"tipo":"simulacro","titulo":"Simulacro de examen","temas":"todo"}]}]}`;
+Entonces el resultado tiene: 4 a 6 unidades temáticas (cada una con lección + quiz) MÁS la unidad "Recta final". En total, mínimo 5 unidades.
+
+Respondé SOLO con este JSON (sin texto antes ni después), siguiendo EXACTAMENTE esta estructura con varias unidades:
+{"unidades":[
+{"titulo":"Nombre del tema 1","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
+{"titulo":"Nombre del tema 2","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
+{"titulo":"Nombre del tema 3","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
+{"titulo":"Nombre del tema 4","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
+{"titulo":"Recta final","nodos":[{"tipo":"simulacro","titulo":"Simulacro de examen","temas":"todo"}]}
+]}
+Títulos de máx 6 palabras, "temas" de máx 15 palabras.`;
 }
 function pLeccion(m, apuntes, nodo){
   return `Sos un tutor universitario argentino (voseo, tono directo, sin vueltas). Materia: "${m.nombre}".
@@ -680,8 +689,17 @@ function renderNueva(err){
     vista={tipo:'generando',msg:'Leyendo tus apuntes y armando el plan…'};render();
     try{
       const m={id:'m'+Date.now(),nombre,fecha,objetivo};
-      const plan=await iaJSON(pPlan(m,apuntes),2048);
-      if(!plan.unidades||!plan.unidades.length) throw new Error('El plan vino vacío');
+      let plan=null;
+      for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
+        const p=await iaJSON(pPlan(m,apuntes),3072);
+        // exigir estructura completa: varias unidades con lección+quiz
+        const unidades=(p&&p.unidades)||[];
+        const conNodos=unidades.filter(u=>u.nodos&&u.nodos.length);
+        const temáticas=conNodos.filter(u=>u.nodos.length>=2||(u.nodos[0]&&u.nodos[0].tipo!=='simulacro'));
+        if(conNodos.length>=3 && temáticas.length>=2){ plan=p; break; }
+        // vino pobre: reintentar
+      }
+      if(!plan) throw new Error('La IA devolvió un plan demasiado corto. Reintentá (a veces resume de más), o agregá más contenido en los apuntes.');
       materias.push(m);
       J.set('et:materias',materias);
       guardarMateria(m.id,{apuntes:recortar(apuntes,60000),plan,completados:{},contenido:{},usadas:{}});
