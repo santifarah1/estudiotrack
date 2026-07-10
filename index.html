@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EstudioTrack — Tu camino al examen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+  :root{
+    --papel:#FAFAF6; --tinta:#1B2A4A; --resaltador:#FFD84D;
+    --aprobado:#2E7D5B; --aprobado-claro:#E3F2EA;
+    --error:#C94F4F; --error-claro:#F9E7E7;
+    --borde:#E3E1D8; --carta:#FFFFFF; --sombra:0 2px 0 var(--borde);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--papel);color:var(--tinta);min-height:100vh;line-height:1.5}
+  .wrap{max-width:520px;margin:0 auto;padding:20px 16px 80px}
+  h1,h2,h3{font-family:'Bricolage Grotesque','Inter',sans-serif}
+  .marca{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .marca .logo{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:22px;position:relative;display:inline-block;padding:0 4px;cursor:pointer}
+  .marca .logo::before{content:"";position:absolute;left:0;right:0;bottom:2px;height:12px;background:var(--resaltador);z-index:-1;transform:skew(-8deg) rotate(-1deg)}
+  .racha{margin-left:auto;font-weight:700;font-size:14px;background:var(--carta);border:1.5px solid var(--borde);border-radius:999px;padding:4px 12px;box-shadow:var(--sombra)}
+  .ajustes{background:var(--carta);border:1.5px solid var(--borde);border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:15px;box-shadow:var(--sombra)}
+  .card{background:var(--carta);border:1.5px solid var(--borde);border-radius:16px;padding:20px;box-shadow:var(--sombra);margin-top:14px}
+  .card h2{font-size:26px;font-weight:800;line-height:1.15;margin-bottom:4px}
+  .sub{color:#5A6780;font-size:14px;margin-bottom:16px}
+  label{display:block;font-size:13px;font-weight:600;margin:14px 0 5px}
+  input,textarea,select{width:100%;font-family:inherit;font-size:15px;color:var(--tinta);background:var(--papel);border:1.5px solid var(--borde);border-radius:10px;padding:10px 12px}
+  input:focus,textarea:focus,select:focus,button:focus-visible{outline:3px solid var(--resaltador);outline-offset:1px;border-color:var(--tinta)}
+  textarea{min-height:80px;resize:vertical}
+  .fila{display:flex;gap:10px}
+  .fila>div{flex:1}
+  .hint{font-size:12px;color:#8A93A5;margin-top:4px}
+  .btn{display:block;width:100%;margin-top:20px;padding:14px;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:16px;color:var(--papel);background:var(--tinta);border:none;border-radius:12px;cursor:pointer;box-shadow:0 3px 0 #0F1B33}
+  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #0F1B33}
+  .btn[disabled]{opacity:.55;cursor:wait}
+  .btn.sec{background:var(--carta);color:var(--tinta);border:1.5px solid var(--borde);box-shadow:var(--sombra)}
+  .btn.chico{width:auto;padding:9px 16px;font-size:14px;margin-top:0}
+  .pasos{margin:12px 0}
+  .paso{display:flex;gap:10px;margin-bottom:10px;font-size:14px}
+  .paso .n{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:var(--resaltador);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .estado-motor{display:flex;align-items:center;gap:8px;font-size:13.5px;background:var(--papel);border:1.5px solid var(--borde);border-radius:10px;padding:10px 12px;margin-top:8px}
+  .estado-motor .punto-v{width:9px;height:9px;border-radius:50%;background:var(--aprobado);flex-shrink:0}
+  .estado-motor .punto-a{width:9px;height:9px;border-radius:50%;background:#E8A93D;flex-shrink:0}
+  .dropzone{border:2px dashed #C9CFDC;border-radius:12px;background:var(--papel);padding:18px 14px;text-align:center;cursor:pointer;font-size:14px;color:#5A6780}
+  .dropzone.arrastrando{border-color:var(--tinta);background:#FFF9E3}
+  .dropzone strong{color:var(--tinta)}
+  .dropzone input{display:none}
+  .archivos{margin-top:8px}
+  .archivo{display:flex;align-items:center;gap:8px;font-size:13px;background:var(--carta);border:1.5px solid var(--borde);border-radius:9px;padding:7px 11px;margin-top:6px}
+  .archivo .ok-a{color:var(--aprobado);font-weight:800}
+  .archivo .err-a{color:var(--error);font-weight:800}
+  .archivo .quitar{margin-left:auto;background:none;border:none;cursor:pointer;color:#8A93A5;font-size:15px;font-weight:700;padding:0 4px}
+  .archivo .estado-a{margin-left:auto;color:#8A93A5;font-size:12px;text-align:right}
+  .materia-item{background:var(--carta);border:1.5px solid var(--borde);border-radius:14px;padding:16px;margin-top:12px;cursor:pointer;box-shadow:var(--sombra);width:100%;text-align:left;font-family:inherit;color:var(--tinta);transition:transform .12s ease}
+  .materia-item:hover{transform:translateX(3px)}
+  .materia-item .nombre{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px}
+  .materia-item .datos{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:12px;color:#5A6780}
+  .mini-barra{height:8px;background:var(--papel);border:1.5px solid var(--borde);border-radius:999px;overflow:hidden;margin-top:10px}
+  .mini-barra>div{height:100%;background:var(--aprobado);border-radius:999px}
+  .materia-head{margin:18px 0 6px}
+  .materia-head h2{font-size:24px;font-weight:800}
+  .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .pill{font-size:12.5px;font-weight:600;background:var(--carta);border:1.5px solid var(--borde);border-radius:999px;padding:4px 11px}
+  .pill.obj{background:var(--resaltador);border-color:#E8C22E}
+  .barra{height:12px;background:var(--carta);border:1.5px solid var(--borde);border-radius:999px;overflow:hidden;margin-top:14px}
+  .barra>div{height:100%;background:var(--aprobado);border-radius:999px;transition:width .5s ease}
+  .barra-label{font-size:12px;color:#5A6780;margin-top:5px}
+  .camino{position:relative;margin-top:26px;padding-left:34px}
+  .camino::before{content:"";position:absolute;left:15px;top:10px;bottom:10px;width:0;border-left:3px dashed #C9CFDC}
+  .unidad-titulo{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#5A6780;margin:26px 0 10px;position:relative}
+  .unidad-titulo::before{content:"";position:absolute;left:-27px;top:5px;width:11px;height:11px;background:var(--papel);border:3px solid #C9CFDC;border-radius:50%}
+  .nodo{position:relative;background:var(--carta);border:1.5px solid var(--borde);border-radius:14px;padding:14px 16px;margin-bottom:12px;cursor:pointer;box-shadow:var(--sombra);display:flex;align-items:center;gap:12px;transition:transform .12s ease;width:100%;text-align:left;font-family:inherit;color:var(--tinta)}
+  .nodo:hover:not(.bloq){transform:translateX(3px)}
+  .nodo::before{content:"";position:absolute;left:-27px;top:50%;transform:translateY(-50%);width:13px;height:13px;border-radius:50%;background:var(--carta);border:3px solid var(--tinta)}
+  .nodo.ok::before{background:var(--aprobado);border-color:var(--aprobado)}
+  .nodo.bloq{opacity:.5;cursor:not-allowed}
+  .nodo.bloq::before{border-color:#C9CFDC}
+  .nodo.actual{border-color:var(--tinta);border-width:2px}
+  .nodo.actual::after{content:"ACÁ";position:absolute;top:-9px;right:12px;font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:10px;letter-spacing:.1em;background:var(--resaltador);padding:2px 8px;border-radius:6px}
+  .nodo .icono{width:38px;height:38px;flex-shrink:0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;background:var(--papel);border:1.5px solid var(--borde)}
+  .nodo.ok .icono{background:var(--aprobado-claro);border-color:var(--aprobado)}
+  .nodo .txt{flex:1;min-width:0}
+  .nodo .tipo{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8A93A5}
+  .nodo .tit{font-weight:600;font-size:14.5px;line-height:1.3}
+  .nodo .check{font-size:18px;color:var(--aprobado);font-weight:800}
+  .volver{background:none;border:none;font-family:inherit;font-weight:600;font-size:14px;color:#5A6780;cursor:pointer;padding:6px 0;margin-bottom:8px}
+  .contenido h2{font-size:23px;font-weight:800;margin-bottom:12px}
+  .contenido p{margin-bottom:12px;font-size:15px}
+  .puntos{margin:12px 0}
+  .punto{background:var(--carta);border:1.5px solid var(--borde);border-radius:12px;padding:12px 14px;margin-bottom:9px;font-size:14.5px;box-shadow:var(--sombra);display:flex;gap:10px}
+  .punto .b{color:var(--tinta);font-weight:800;flex-shrink:0}
+  .ejemplo{background:#FFF9E3;border:1.5px solid #E8C22E;border-radius:12px;padding:13px 15px;font-size:14px;margin-top:14px}
+  .ejemplo strong{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
+  .q-num{font-size:12px;font-weight:700;letter-spacing:.08em;color:#8A93A5;text-transform:uppercase;margin-bottom:6px}
+  .q-texto{font-size:17px;font-weight:600;margin-bottom:16px;line-height:1.4}
+  .opcion{display:block;width:100%;text-align:left;font-family:inherit;font-size:14.5px;color:var(--tinta);background:var(--carta);border:1.5px solid var(--borde);border-radius:12px;padding:13px 15px;margin-bottom:10px;cursor:pointer;box-shadow:var(--sombra)}
+  .opcion:hover:not([disabled]){border-color:var(--tinta)}
+  .opcion.correcta{background:var(--aprobado-claro);border-color:var(--aprobado);font-weight:600}
+  .opcion.mal{background:var(--error-claro);border-color:var(--error)}
+  .explic{border-radius:12px;padding:13px 15px;font-size:14px;margin:6px 0 14px;border:1.5px solid}
+  .explic.bien{background:var(--aprobado-claro);border-color:var(--aprobado)}
+  .explic.mal{background:var(--error-claro);border-color:var(--error)}
+  .explic strong{display:block;margin-bottom:3px}
+  .resultado{text-align:center;padding:26px 0 10px}
+  .resultado .nota{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:56px;line-height:1;display:inline-block;position:relative;padding:0 10px}
+  .resultado .nota::before{content:"";position:absolute;left:0;right:0;bottom:6px;height:20px;background:var(--resaltador);z-index:-1;transform:rotate(-1.5deg)}
+  .resultado p{margin-top:12px;font-size:15px}
+  .cargando{text-align:center;padding:44px 20px}
+  .lapiz{font-size:40px;display:inline-block;animation:escribir 1s ease-in-out infinite}
+  @keyframes escribir{0%,100%{transform:rotate(-6deg) translateY(0)}50%{transform:rotate(6deg) translateY(-4px)}}
+  .cargando p{margin-top:14px;font-weight:600;font-size:15px}
+  .cargando .sub{margin-top:4px}
+  .err{background:var(--error-claro);border:1.5px solid var(--error);border-radius:12px;padding:13px 15px;font-size:14px;margin-top:14px}
+  .vacio{text-align:center;padding:36px 16px;color:#5A6780;font-size:14px}
+  .vacio .emoji{font-size:44px;display:block;margin-bottom:10px}
+  .acciones-pie{display:flex;gap:10px;margin-top:26px}
+  .acciones-pie .btn{margin-top:0}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+/* =========================================================
+   EstudioTrack — camino de estudio con IA, gratis
+   Motor principal: worker compartido (Cloudflare) con la clave del admin.
+   Plan B opcional: clave propia de Gemini del usuario (en Ajustes).
+   ========================================================= */
+
+/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+   CONFIGURACIÓN DEL ADMIN (Santi): pegá acá la URL de tu worker
+   Ej: 'https://estudiotrack.tuusuario.workers.dev'
+   Si queda vacío, la app pide clave propia a cada usuario.
+   <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< */
+const BACKEND_URL = 'https://estudiotrack.eliasfarah166.workers.dev';
+
+const $app = document.getElementById('app');
+
+/* ---------- almacenamiento (localStorage + fallback en memoria) ---------- */
+const mem = {};
+const st = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return mem[k] ?? null; } },
+  set(k,v){ mem[k]=v; try{ localStorage.setItem(k,v); }catch(e){} },
+  del(k){ delete mem[k]; try{ localStorage.removeItem(k); }catch(e){} }
+};
+const J = {
+  get(k,def){ const v=st.get(k); if(!v) return def; try{ return JSON.parse(v); }catch(e){ return def; } },
+  set(k,obj){ st.set(k, JSON.stringify(obj)); }
+};
+
+/* ---------- estado global ---------- */
+let clavePropia = st.get('et:key') || '';
+let materias = J.get('et:materias', []);
+let racha = J.get('et:racha', {dias:0, ultima:null});
+let vista = {tipo:'inicio'};
+let archivosSubidos = [];
+
+function datosMateria(id){ return J.get('et:m:'+id, null); }
+function guardarMateria(id, datos){ J.set('et:m:'+id, datos); }
+function borrarMateria(id){
+  st.del('et:m:'+id);
+  materias = materias.filter(m=>m.id!==id);
+  J.set('et:materias', materias);
+}
+function hayMotor(){ return !!BACKEND_URL || !!clavePropia; }
+
+/* =========================================================
+   MOTOR DE IA
+   Orden: 1) worker compartido  2) clave propia (plan B)
+   ========================================================= */
+const MODELOS = ['gemini-2.5-flash','gemini-flash-latest','gemini-2.0-flash'];
+let modeloActivo = st.get('et:modelo') || MODELOS[0];
+
+async function llamadaCruda(via, modelo, contents, generationConfig){
+  let res;
+  if(via==='backend'){
+    res = await fetch(BACKEND_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:modelo, contents, generationConfig})
+    });
+  }else{
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${encodeURIComponent(clavePropia)}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents, generationConfig})
+    });
+  }
+  const data = await res.json().catch(()=>({error:{message:'Respuesta ilegible (HTTP '+res.status+')'}}));
+  if(data.error){
+    const msg = data.error.message||'Error de la API';
+    if(res.status===429) throw new Error('LIMITE');
+    if(res.status===400 && /API key/i.test(msg)) throw new Error('CLAVE_INVALIDA');
+    if(res.status===404) throw new Error('MODELO_404');
+    throw new Error(msg);
+  }
+  const texto = (data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
+  if(!texto) throw new Error('Respuesta vacía de la IA');
+  return texto;
+}
+
+// prueba modelos alternativos si el activo devuelve 404 (nombres cambian con el tiempo)
+async function llamadaConModelos(via, contents, generationConfig){
+  const candidatos=[modeloActivo, ...MODELOS.filter(m=>m!==modeloActivo)];
+  let ultimoErr;
+  for(const modelo of candidatos){
+    try{
+      const r = await llamadaCruda(via, modelo, contents, generationConfig);
+      if(modelo!==modeloActivo){modeloActivo=modelo;st.set('et:modelo',modelo);}
+      return r;
+    }catch(e){
+      if(e.message!=='MODELO_404') throw e;
+      ultimoErr=e;
+    }
+  }
+  throw ultimoErr||new Error('Ningún modelo disponible');
+}
+
+// capa principal: backend primero, clave propia como plan B, reintento en 429
+async function gemini(contents, generationConfig){
+  const vias=[];
+  if(BACKEND_URL) vias.push('backend');
+  if(clavePropia) vias.push('propia');
+  if(!vias.length) throw new Error('SIN_MOTOR');
+
+  let ultimoErr;
+  for(const via of vias){
+    for(let intento=0;intento<2;intento++){
+      try{
+        return await llamadaConModelos(via, contents, generationConfig);
+      }catch(e){
+        ultimoErr=e;
+        if(e.message==='LIMITE'){
+          // cuota por minuto: esperar y reintentar una vez; si persiste, probar la otra vía
+          if(intento===0){ await new Promise(r=>setTimeout(r,5000)); continue; }
+          break;
+        }
+        if(e.message==='CLAVE_INVALIDA'){ break; } // esta vía no sirve, probar la otra
+        // error genérico: un reintento corto
+        if(intento===0){ await new Promise(r=>setTimeout(r,1200)); continue; }
+        break;
+      }
+    }
+  }
+  throw ultimoErr;
+}
+
+function parsearJSON(texto){
+  const limpio = texto.replace(/```json|```/g,'').trim();
+  const ini = limpio.indexOf('{');
+  if(ini===-1) throw new Error('Respuesta sin JSON');
+  const cuerpo = limpio.slice(ini, limpio.lastIndexOf('}')+1);
+  try{ return JSON.parse(cuerpo); }
+  catch(e){
+    let s = limpio.slice(ini);
+    const ult = Math.max(s.lastIndexOf('}'), s.lastIndexOf(']'), s.lastIndexOf('"'));
+    if(ult>0) s = s.slice(0, ult+1);
+    const pila=[]; let enStr=false, escp=false;
+    for(const ch of s){
+      if(escp){escp=false;continue;}
+      if(ch==='\\'){escp=true;continue;}
+      if(ch==='"'){enStr=!enStr;continue;}
+      if(enStr) continue;
+      if(ch==='{') pila.push('}');
+      else if(ch==='[') pila.push(']');
+      else if(ch==='}'||ch===']') pila.pop();
+    }
+    if(enStr) s+='"';
+    while(pila.length) s+=pila.pop();
+    return JSON.parse(s);
+  }
+}
+
+async function iaJSON(prompt, maxTokens){
+  const texto = await gemini(
+    [{text:prompt}],
+    {temperature:0.4, maxOutputTokens:maxTokens||3072, responseMimeType:'application/json'}
+  );
+  return parsearJSON(texto);
+}
+
+function mensajeError(e){
+  if(e.message==='LIMITE') return 'El motor de IA llegó a su límite por minuto (es compartido entre los que usan la app). Esperá un minuto y reintentá. Si pasa seguido, podés cargar tu propia clave gratis en Ajustes (⚙️).';
+  if(e.message==='CLAVE_INVALIDA') return 'La clave configurada no es válida. Revisala en Ajustes (⚙️).';
+  if(e.message==='SIN_MOTOR') return 'La app no tiene motor de IA configurado. Entrá a Ajustes (⚙️).';
+  return e.message||'Error desconocido';
+}
+
+/* ---------- sanitización ---------- */
+function sanitizarTexto(txt){
+  return (txt||'')
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g,' ')
+    .replace(/[\uD800-\uDFFF]/g,'')
+    .replace(/[ \t]{3,}/g,'  ')
+    .replace(/\n{4,}/g,'\n\n\n');
+}
+function recortar(txt, max=15000){
+  txt = sanitizarTexto(txt);
+  return txt.length>max ? txt.slice(0,max)+'\n[apuntes recortados]' : txt;
+}
+
+/* ---------- prompts ---------- */
+function pPlan(m, apuntes){
+  return `Sos un tutor universitario argentino. Un estudiante rinde "${m.nombre}" el ${m.fecha} y quiere sacarse ${m.objetivo} o más.
+
+Apuntes del estudiante:
+---
+${recortar(apuntes)}
+---
+
+Armá un plan de estudio de 4 a 6 unidades temáticas basadas SOLO en los apuntes, en el orden lógico para estudiar. Cada unidad tiene exactamente 2 nodos: una lección y un quiz. Al final agregá una unidad "Recta final" con un único nodo tipo "simulacro".
+
+Respondé SOLO con este JSON:
+{"unidades":[{"titulo":"máx 6 palabras","nodos":[{"tipo":"leccion","titulo":"máx 7 palabras","temas":"temas puntuales que cubre, máx 15 palabras"},{"tipo":"quiz","titulo":"máx 7 palabras","temas":"..."}]},...,{"titulo":"Recta final","nodos":[{"tipo":"simulacro","titulo":"Simulacro de examen","temas":"todo"}]}]}`;
+}
+function pLeccion(m, apuntes, nodo){
+  return `Sos un tutor universitario argentino (voseo, tono directo, sin vueltas). Materia: "${m.nombre}".
+Apuntes del estudiante:
+---
+${recortar(apuntes)}
+---
+Armá una lección sobre: "${nodo.titulo}" (temas: ${nodo.temas}). Basate SOLO en los apuntes; si falta algo esencial, completá con conocimiento estándar de la materia. Priorizá lo que los apuntes marquen como importante o "muy preguntado".
+
+Respondé SOLO con este JSON:
+{"resumen":"2-3 oraciones con la idea central","puntos":["5 a 7 puntos clave, 1-2 oraciones cada uno, concretos y estudiables"],"ejemplo":"un caso típico de examen resuelto o explicado, 2-4 oraciones"}`;
+}
+function pQuiz(m, apuntes, nodo, esSimulacro, evitar){
+  const n = esSimulacro ? 8 : 5;
+  const alcance = esSimulacro ? 'TODOS los temas de los apuntes, mezclados, con dificultad de examen final' : `"${nodo.titulo}" (temas: ${nodo.temas})`;
+  return `Sos un profesor universitario argentino armando un ${esSimulacro?'simulacro de examen':'quiz'} de "${m.nombre}".
+Apuntes del estudiante:
+---
+${recortar(apuntes)}
+---
+Armá ${n} preguntas de opción múltiple sobre ${alcance}. Basate en los apuntes. 4 opciones plausibles y cortas, UNA sola correcta, en posición variada. Explicación breve de por qué.
+${evitar?`NO repitas estas preguntas ya usadas: ${evitar.slice(0,900)}`:''}
+Respondé SOLO con este JSON:
+{"preguntas":[{"q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}]}`;
+}
+
+/* ---------- lectura de archivos ---------- */
+if(window.pdfjsLib){
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+function leerComoBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.split(',')[1]);
+    r.onerror=()=>rej(new Error('No se pudo leer el archivo'));
+    r.readAsDataURL(file);
+  });
+}
+async function extraerPDF(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let texto='';
+  const maxPag=Math.min(pdf.numPages,50);
+  for(let i=1;i<=maxPag;i++){
+    const pag=await pdf.getPage(i);
+    const cont=await pag.getTextContent();
+    texto+=cont.items.map(it=>it.str).join(' ')+'\n';
+  }
+  return texto.trim();
+}
+async function extraerDocx(file){
+  const buf=await file.arrayBuffer();
+  const res=await mammoth.extractRawText({arrayBuffer:buf});
+  return res.value.trim();
+}
+function extraerTextoPlano(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.trim());
+    r.onerror=()=>rej(new Error('No se pudo leer'));
+    r.readAsText(file);
+  });
+}
+async function extraerImagen(file){
+  const b64=await leerComoBase64(file);
+  const t = await gemini(
+    [{inline_data:{mime_type:file.type,data:b64}},
+     {text:'Transcribí TODO el texto de estos apuntes tal cual está, sin comentarios ni formato extra. Solo el texto.'}],
+    {temperature:0.1, maxOutputTokens:4096}
+  );
+  const limpio=t.trim();
+  if(!limpio) throw new Error('No pude leer texto en la foto');
+  return limpio;
+}
+async function procesarArchivo(file){
+  const item={nombre:file.name,texto:'',estado:'leyendo',msg:''};
+  archivosSubidos.push(item);
+  pintarArchivos();
+  try{
+    const nom=file.name.toLowerCase();
+    if(file.type==='application/pdf'||nom.endsWith('.pdf')) item.texto=await extraerPDF(file);
+    else if(nom.endsWith('.docx')) item.texto=await extraerDocx(file);
+    else if(file.type.startsWith('image/')){
+      if(!hayMotor()) throw new Error('Falta motor de IA para transcribir fotos');
+      item.texto=await extraerImagen(file);
+    }
+    else if(file.type.startsWith('text/')||nom.endsWith('.txt')||nom.endsWith('.md')) item.texto=await extraerTextoPlano(file);
+    else throw new Error('Formato no soportado');
+    if(!item.texto||item.texto.length<20) throw new Error('No encontré texto legible');
+    item.estado='ok';
+  }catch(e){
+    item.estado='error';
+    item.msg=e.message==='LIMITE'?'Límite por minuto: reintentá':e.message||'Error al leer';
+  }
+  pintarArchivos();
+}
+function textoDeArchivos(){
+  return archivosSubidos.filter(a=>a.estado==='ok').map(a=>`--- ${a.nombre} ---\n${a.texto}`).join('\n\n');
+}
+function pintarArchivos(){
+  const cont=document.getElementById('lista-archivos');
+  if(!cont) return;
+  cont.innerHTML=archivosSubidos.map((a,i)=>`
+    <div class="archivo">
+      ${a.estado==='ok'?'<span class="ok-a">✓</span>':a.estado==='error'?'<span class="err-a">✗</span>':'<span>⏳</span>'}
+      <span>${esc(a.nombre)}</span>
+      ${a.estado==='leyendo'?'<span class="estado-a">leyendo…</span>':''}
+      ${a.estado==='error'?`<span class="estado-a">${esc(a.msg)}</span>`:''}
+      ${a.estado!=='leyendo'?`<button class="quitar" data-i="${i}" aria-label="Quitar">✕</button>`:''}
+    </div>`).join('');
+  cont.querySelectorAll('.quitar').forEach(b=>{
+    b.onclick=()=>{archivosSubidos.splice(+b.dataset.i,1);pintarArchivos();};
+  });
+}
+
+/* ---------- helpers ---------- */
+function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML;}
+function iconoNodo(t){return t==='leccion'?'📖':t==='quiz'?'✏️':'🎯';}
+function nombreTipo(t){return t==='leccion'?'Lección':t==='quiz'?'Quiz':'Simulacro';}
+function nodosPlanos(datos){
+  const lista=[];
+  datos.plan.unidades.forEach((u,ui)=>u.nodos.forEach((n,ni)=>lista.push({...n,id:`${ui}-${ni}`})));
+  return lista;
+}
+function diasRestantes(fecha){
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const f=new Date(fecha+'T00:00:00');
+  return Math.max(0,Math.round((f-hoy)/86400000));
+}
+function marcarRacha(){
+  const hoy=new Date().toISOString().slice(0,10);
+  if(racha.ultima===hoy) return;
+  const ayer=new Date(Date.now()-86400000).toISOString().slice(0,10);
+  racha.dias=(racha.ultima===ayer)?racha.dias+1:1;
+  racha.ultima=hoy;
+  J.set('et:racha',racha);
+}
+function barajar(preguntas){
+  const mezcla=[...preguntas].sort(()=>Math.random()-.5);
+  return mezcla.map(p=>{
+    const idx=p.opciones.map((_,i)=>i).sort(()=>Math.random()-.5);
+    return{q:p.q,opciones:idx.map(i=>p.opciones[i]),correcta:idx.indexOf(p.correcta),explicacion:p.explicacion};
+  });
+}
+
+/* =========================================================
+   VISTAS
+   ========================================================= */
+function render(){
+  const t=vista.tipo;
+  if(t==='inicio')renderInicio();
+  else if(t==='ajustes')renderAjustes();
+  else if(t==='nueva')renderNueva();
+  else if(t==='generando')renderCargando(vista.msg);
+  else if(t==='camino')renderCamino();
+  else if(t==='leccion')renderLeccion();
+  else if(t==='quiz')renderQuiz();
+}
+function marcaHTML(){
+  const r = racha.dias?`<span class="racha">🔥 ${racha.dias}</span>`:'';
+  return `<div class="marca"><span class="logo" id="ir-inicio">EstudioTrack</span>${r}<button class="ajustes" id="btn-ajustes" title="Ajustes" aria-label="Ajustes">⚙️</button></div>`;
+}
+function wireMarca(){
+  const l=document.getElementById('ir-inicio');
+  if(l) l.onclick=()=>{vista={tipo:'inicio'};render();};
+  const a=document.getElementById('btn-ajustes');
+  if(a) a.onclick=()=>{vista={tipo:'ajustes',volver:vista};render();};
+}
+
+/* ---------- inicio ---------- */
+function renderInicio(){
+  let lista='';
+  if(!materias.length){
+    lista=`<div class="vacio"><span class="emoji">🎓</span>Todavía no tenés materias.<br>Creá la primera y subí tus apuntes.</div>`;
+  }else{
+    lista=materias.map(m=>{
+      const d=datosMateria(m.id);
+      let pct=0, pendiente='';
+      if(d&&d.plan){
+        const planos=nodosPlanos(d);
+        const hechos=planos.filter(n=>d.completados[n.id]).length;
+        pct=Math.round(hechos/planos.length*100);
+        const prox=planos.find(n=>!d.completados[n.id]);
+        pendiente=prox?`Seguís en: ${prox.titulo}`:'¡Camino completo! 🎉';
+      }
+      const dias=diasRestantes(m.fecha);
+      return `<button class="materia-item" data-id="${m.id}">
+        <div class="nombre">${esc(m.nombre)}</div>
+        <div class="datos">
+          <span>📅 ${dias===0?'¡Es hoy!':`Faltan ${dias} día${dias===1?'':'s'}`}</span>
+          <span>🎯 ${esc(m.objetivo)}</span>
+          <span>${esc(pendiente)}</span>
+        </div>
+        <div class="mini-barra"><div style="width:${pct}%"></div></div>
+      </button>`;
+    }).join('');
+  }
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <div class="card">
+      <h2>Tus materias</h2>
+      <p class="sub">Tocá una para seguir el camino donde lo dejaste.</p>
+      ${lista}
+      <button class="btn" id="nueva">+ Nueva materia</button>
+      ${!hayMotor()?`<p class="hint" style="margin-top:10px">⚙️ La app no tiene motor de IA configurado todavía. Entrá a Ajustes.</p>`:''}
+    </div>`;
+  wireMarca();
+  document.getElementById('nueva').onclick=()=>{
+    if(!hayMotor()){vista={tipo:'ajustes',volver:{tipo:'nueva'}};render();return;}
+    archivosSubidos=[];
+    vista={tipo:'nueva'};render();
+  };
+  $app.querySelectorAll('.materia-item').forEach(b=>{
+    b.onclick=()=>{vista={tipo:'camino',id:b.dataset.id};render();};
+  });
+}
+
+/* ---------- ajustes ---------- */
+function renderAjustes(err){
+  const volver=vista.volver||{tipo:'inicio'};
+  const estadoBackend = BACKEND_URL
+    ? `<div class="estado-motor"><span class="punto-v"></span>Motor compartido activo — no tenés que configurar nada. Si alguna vez se satura, podés usar tu propia clave como plan B acá abajo.</div>`
+    : `<div class="estado-motor"><span class="punto-a"></span>Motor compartido no configurado en esta copia de la app. Hace falta una clave propia (gratis) para usarla.</div>`;
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <div class="card">
+      <h2>Ajustes</h2>
+      <p class="sub">Motor de IA de EstudioTrack.</p>
+      ${estadoBackend}
+      <label style="margin-top:20px">Clave propia de Gemini (${BACKEND_URL?'opcional, plan B':'necesaria'})</label>
+      <input id="clave" type="password" placeholder="AIza…" value="${esc(clavePropia)}">
+      <div class="pasos" style="margin-top:12px">
+        <div class="paso"><span class="n">1</span><span>Entrá a <strong>aistudio.google.com/apikey</strong> con tu cuenta de Google (gratis, sin tarjeta).</span></div>
+        <div class="paso"><span class="n">2</span><span>Tocá <strong>"Create API key"</strong>, copiá la clave y pegala arriba.</span></div>
+      </div>
+      <p class="hint">La clave se guarda solo en este dispositivo. En el nivel gratuito, Google puede usar lo que envíes para mejorar sus modelos.</p>
+      <div id="err-clave">${err?`<div class="err">${esc(err)}</div>`:''}</div>
+      <button class="btn" id="guardar">Guardar${''}</button>
+      ${clavePropia?'<button class="btn sec" id="quitar-clave">Quitar clave propia</button>':''}
+      <button class="btn sec" id="cancelar">Volver</button>
+    </div>`;
+  wireMarca();
+  document.getElementById('cancelar').onclick=()=>{vista=volver;render();};
+  const q=document.getElementById('quitar-clave');
+  if(q) q.onclick=()=>{clavePropia='';st.del('et:key');renderAjustes();};
+  document.getElementById('guardar').onclick=async ()=>{
+    const btn=document.getElementById('guardar');
+    const k=document.getElementById('clave').value.trim();
+    if(!k){
+      if(BACKEND_URL){vista=volver;render();return;}
+      document.getElementById('err-clave').innerHTML='<div class="err">Sin motor compartido, la clave es necesaria.</div>';
+      return;
+    }
+    const anterior=clavePropia;
+    clavePropia=k;
+    btn.disabled=true;btn.textContent='Probando…';
+    try{
+      await llamadaConModelos('propia',[{text:'Respondé solo con este JSON: {"ok":true}'}],{maxOutputTokens:50,responseMimeType:'application/json'});
+      st.set('et:key',k);
+      vista=volver;render();
+    }catch(e){
+      clavePropia=anterior;
+      btn.disabled=false;btn.textContent='Guardar';
+      document.getElementById('err-clave').innerHTML=`<div class="err">${esc(mensajeError(e))}</div>`;
+    }
+  };
+}
+
+/* ---------- nueva materia ---------- */
+function renderNueva(err){
+  const hoyMas7=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <div class="card">
+      <h2>Nueva materia</h2>
+      <p class="sub">Subí tus apuntes y la IA arma el camino: lecciones, quizzes y simulacro.</p>
+      <label for="materia">Materia</label>
+      <input id="materia" placeholder="Ej: Contabilidad Agropecuaria">
+      <div class="fila">
+        <div>
+          <label for="fecha">Fecha del examen</label>
+          <input id="fecha" type="date" value="${hoyMas7}">
+        </div>
+        <div>
+          <label for="objetivo">Nota objetivo</label>
+          <select id="objetivo">
+            <option>4+</option><option>6+</option><option selected>8+</option><option>10</option>
+          </select>
+        </div>
+      </div>
+      <label>Tus apuntes</label>
+      <div class="dropzone" id="dz">
+        <strong>Subí tus resúmenes</strong> — PDF, Word (.docx), texto o fotos de apuntes<br>
+        <span class="hint">Tocá acá o arrastrá los archivos</span>
+        <input type="file" id="inputArchivos" multiple accept=".pdf,.docx,.txt,.md,image/png,image/jpeg,image/webp">
+      </div>
+      <div class="archivos" id="lista-archivos"></div>
+      <label for="extra">¿Algo más? (opcional)</label>
+      <textarea id="extra" placeholder="Pegá texto acá, o aclaraciones: qué temas entran, qué pesa más…"></textarea>
+      <p class="hint">Las fotos se transcriben con IA. PDFs escaneados sin texto seleccionable: subí las páginas como fotos.</p>
+      <div id="err-nueva">${err?`<div class="err">${esc(err)}</div>`:''}</div>
+      <button class="btn" id="crear">Armar mi camino</button>
+      <button class="btn sec" id="cancelar">Volver</button>
+    </div>`;
+  wireMarca();
+  const dz=document.getElementById('dz');
+  const inp=document.getElementById('inputArchivos');
+  dz.onclick=()=>inp.click();
+  dz.ondragover=e=>{e.preventDefault();dz.classList.add('arrastrando');};
+  dz.ondragleave=()=>dz.classList.remove('arrastrando');
+  dz.ondrop=e=>{e.preventDefault();dz.classList.remove('arrastrando');[...e.dataTransfer.files].forEach(procesarArchivo);};
+  inp.onchange=()=>{[...inp.files].forEach(procesarArchivo);inp.value='';};
+  pintarArchivos();
+  document.getElementById('cancelar').onclick=()=>{vista={tipo:'inicio'};render();};
+
+  document.getElementById('crear').onclick=async ()=>{
+    const mostrarErr=m=>{const el=document.getElementById('err-nueva');if(el)el.innerHTML=`<div class="err">${esc(m)}</div>`;};
+    const nombre=document.getElementById('materia').value.trim();
+    const fecha=document.getElementById('fecha').value;
+    const objetivo=document.getElementById('objetivo').value;
+    const extra=document.getElementById('extra').value.trim();
+    if(archivosSubidos.some(a=>a.estado==='leyendo')){mostrarErr('Esperá que terminen de leerse los archivos.');return;}
+    const apuntes=[textoDeArchivos(),extra].filter(Boolean).join('\n\n');
+    if(!nombre||!fecha||apuntes.length<100){mostrarErr('Completá la materia, la fecha y subí material con contenido (o pegá texto).');return;}
+
+    vista={tipo:'generando',msg:'Leyendo tus apuntes y armando el plan…'};render();
+    try{
+      const m={id:'m'+Date.now(),nombre,fecha,objetivo};
+      const plan=await iaJSON(pPlan(m,apuntes),2048);
+      if(!plan.unidades||!plan.unidades.length) throw new Error('El plan vino vacío');
+      materias.push(m);
+      J.set('et:materias',materias);
+      guardarMateria(m.id,{apuntes:recortar(apuntes,60000),plan,completados:{},contenido:{},usadas:{}});
+      archivosSubidos=[];
+      vista={tipo:'camino',id:m.id};render();
+    }catch(e){
+      renderNueva(mensajeError(e));
+    }
+  };
+}
+
+/* ---------- loading ---------- */
+function renderCargando(msg){
+  $app.innerHTML=`${marcaHTML()}
+    <div class="card cargando">
+      <span class="lapiz">✏️</span>
+      <p>${esc(msg)}</p>
+      <p class="sub">Puede tardar unos segundos.</p>
+    </div>`;
+  wireMarca();
+}
+
+/* ---------- camino ---------- */
+function renderCamino(){
+  const m=materias.find(x=>x.id===vista.id);
+  const d=datosMateria(vista.id);
+  if(!m||!d||!d.plan){vista={tipo:'inicio'};render();return;}
+  const planos=nodosPlanos(d);
+  const hechos=planos.filter(n=>d.completados[n.id]).length;
+  const pct=Math.round(hechos/planos.length*100);
+  const actual=planos.find(n=>!d.completados[n.id]);
+  const dias=diasRestantes(m.fecha);
+
+  let caminoHTML='';
+  d.plan.unidades.forEach((u,ui)=>{
+    caminoHTML+=`<div class="unidad-titulo">${esc(u.titulo)}</div>`;
+    u.nodos.forEach((n,ni)=>{
+      const id=`${ui}-${ni}`;
+      const idx=planos.findIndex(p=>p.id===id);
+      const ok=!!d.completados[id];
+      const desbloq=ok||planos.slice(0,idx).every(p=>d.completados[p.id]);
+      const esActual=actual&&actual.id===id;
+      caminoHTML+=`
+        <button class="nodo ${ok?'ok':''} ${!desbloq?'bloq':''} ${esActual?'actual':''}" data-id="${id}" ${!desbloq?'disabled':''}>
+          <span class="icono">${iconoNodo(n.tipo)}</span>
+          <span class="txt">
+            <span class="tipo">${nombreTipo(n.tipo)}</span><br>
+            <span class="tit">${esc(n.titulo)}</span>
+          </span>
+          ${ok?'<span class="check">✓</span>':''}
+        </button>`;
+    });
+  });
+
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver-inicio">← Mis materias</button>
+    <div class="materia-head">
+      <h2>${esc(m.nombre)}</h2>
+      <div class="meta">
+        <span class="pill">📅 ${dias===0?'¡Es hoy!':`Faltan ${dias} día${dias===1?'':'s'}`}</span>
+        <span class="pill obj">🎯 Objetivo ${esc(m.objetivo)}</span>
+      </div>
+      <div class="barra"><div style="width:${pct}%"></div></div>
+      <div class="barra-label">${pct}% del camino recorrido${pct===100?' — ¡a rendir tranquilo! 🎓':''}</div>
+    </div>
+    <div class="camino">${caminoHTML}</div>
+    <div class="acciones-pie">
+      <button class="btn sec chico" id="borrar">Borrar materia</button>
+    </div>`;
+  wireMarca();
+  document.getElementById('volver-inicio').onclick=()=>{vista={tipo:'inicio'};render();};
+  $app.querySelectorAll('.nodo:not(.bloq)').forEach(b=>{b.onclick=()=>abrirNodo(vista.id,b.dataset.id);});
+  document.getElementById('borrar').onclick=()=>{
+    if(confirm(`Esto borra "${m.nombre}" con todo su progreso. ¿Seguimos?`)){
+      borrarMateria(vista.id);
+      vista={tipo:'inicio'};render();
+    }
+  };
+}
+
+/* ---------- abrir nodo ---------- */
+async function abrirNodo(mid, nid, forzarNuevo){
+  const m=materias.find(x=>x.id===mid);
+  const d=datosMateria(mid);
+  const planos=nodosPlanos(d);
+  const nodo=planos.find(n=>n.id===nid);
+  if(!nodo) return;
+
+  if(!d.contenido[nid]||forzarNuevo){
+    vista={tipo:'generando',msg:nodo.tipo==='leccion'?'Preparando la lección…':nodo.tipo==='simulacro'?'Armando el simulacro…':'Armando el quiz…'};
+    render();
+    try{
+      let cont;
+      if(nodo.tipo==='leccion'){
+        cont=await iaJSON(pLeccion(m,d.apuntes,nodo),2560);
+        if(!cont.resumen||!cont.puntos) throw new Error('La lección vino incompleta');
+      }else{
+        const evitar=forzarNuevo?(d.usadas[nid]||''):'';
+        cont=await iaJSON(pQuiz(m,d.apuntes,nodo,nodo.tipo==='simulacro',evitar),4096);
+        if(!cont.preguntas||!cont.preguntas.length) throw new Error('El quiz vino vacío');
+        d.usadas[nid]=cont.preguntas.map(p=>p.q).join(' | ');
+      }
+      d.contenido[nid]=cont;
+      guardarMateria(mid,d);
+    }catch(e){
+      // si falló regenerar pero hay contenido viejo, usarlo barajado
+      if(forzarNuevo&&d.contenido[nid]){
+        vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(d.contenido[nid].preguntas),i:0,aciertos:0,respondida:false};
+        render();
+        return;
+      }
+      vista={tipo:'camino',id:mid};render();
+      alert('No pude generar este contenido: '+mensajeError(e));
+      return;
+    }
+  }
+  if(nodo.tipo==='leccion') vista={tipo:'leccion',mid,nid,nodo,contenido:d.contenido[nid]};
+  else vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(d.contenido[nid].preguntas),i:0,aciertos:0,respondida:false};
+  render();
+}
+
+/* ---------- lección ---------- */
+function renderLeccion(){
+  const c=vista.contenido;
+  const d=datosMateria(vista.mid);
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver">← Volver al camino</button>
+    <div class="card contenido">
+      <h2>${esc(vista.nodo.titulo)}</h2>
+      <p>${esc(c.resumen)}</p>
+      <div class="puntos">
+        ${(c.puntos||[]).map(p=>`<div class="punto"><span class="b">›</span><span>${esc(p)}</span></div>`).join('')}
+      </div>
+      ${c.ejemplo?`<div class="ejemplo"><strong>Caso de examen</strong>${esc(c.ejemplo)}</div>`:''}
+      <button class="btn" id="listo">${d.completados[vista.nid]?'Volver al camino':'Entendido, siguiente ✓'}</button>
+    </div>`;
+  wireMarca();
+  document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+  document.getElementById('listo').onclick=()=>{
+    const d2=datosMateria(vista.mid);
+    if(!d2.completados[vista.nid]){
+      d2.completados[vista.nid]=true;
+      guardarMateria(vista.mid,d2);
+      marcarRacha();
+    }
+    vista={tipo:'camino',id:vista.mid};render();
+  };
+}
+
+/* ---------- quiz / simulacro ---------- */
+function renderQuiz(){
+  const total=vista.preguntas.length;
+  if(vista.i>=total){renderResultado(total);return;}
+  const q=vista.preguntas[vista.i];
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver">← Volver al camino</button>
+    <div class="card">
+      <div class="q-num">${nombreTipo(vista.nodo.tipo)} · Pregunta ${vista.i+1} de ${total}</div>
+      <div class="q-texto">${esc(q.q)}</div>
+      <div id="ops">
+        ${q.opciones.map((o,i)=>`<button class="opcion" data-i="${i}">${esc(o)}</button>`).join('')}
+      </div>
+      <div id="feedback"></div>
+    </div>`;
+  wireMarca();
+  document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+  $app.querySelectorAll('.opcion').forEach(btn=>{
+    btn.onclick=()=>{
+      if(vista.respondida)return;
+      vista.respondida=true;
+      const elegida=+btn.dataset.i;
+      const bien=elegida===q.correcta;
+      if(bien)vista.aciertos++;
+      $app.querySelectorAll('.opcion').forEach(b=>{
+        b.disabled=true;
+        const i=+b.dataset.i;
+        if(i===q.correcta)b.classList.add('correcta');
+        else if(i===elegida)b.classList.add('mal');
+      });
+      document.getElementById('feedback').innerHTML=`
+        <div class="explic ${bien?'bien':'mal'}">
+          <strong>${bien?'¡Bien ahí! ✓':'No era esa ✗'}</strong>${esc(q.explicacion||'')}
+        </div>
+        <button class="btn" id="sig">${vista.i+1<total?'Siguiente pregunta':'Ver resultado'}</button>`;
+      document.getElementById('sig').onclick=()=>{vista.i++;vista.respondida=false;render();};
+    };
+  });
+}
+
+function renderResultado(total){
+  const pct=Math.round(vista.aciertos/total*100);
+  const aprobado=pct>=70;
+  const nota=Math.max(1,Math.round(pct/10));
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <div class="card resultado">
+      <div class="nota">${vista.aciertos}/${total}</div>
+      <p><strong>${aprobado?'¡Aprobado!':'Todavía no'}</strong> — equivale a un ${nota} más o menos.</p>
+      <p class="sub">${aprobado?'Nodo completado. Seguí el camino.':'Necesitás 70% para avanzar. Repasá la lección y volvé a intentar: la IA genera preguntas nuevas.'}</p>
+      <div class="acciones-pie">
+        ${aprobado
+          ?`<button class="btn" id="seguir">Seguir el camino →</button>`
+          :`<button class="btn sec" id="volverBtn">Volver al camino</button>
+            <button class="btn" id="reint">Reintentar</button>`}
+      </div>
+    </div>`;
+  wireMarca();
+  if(aprobado){
+    document.getElementById('seguir').onclick=()=>{
+      const d=datosMateria(vista.mid);
+      d.completados[vista.nid]=true;
+      guardarMateria(vista.mid,d);
+      marcarRacha();
+      vista={tipo:'camino',id:vista.mid};render();
+    };
+  }else{
+    document.getElementById('volverBtn').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+    document.getElementById('reint').onclick=()=>abrirNodo(vista.mid,vista.nid,true);
+  }
+}
+
+/* ---------- arranque ---------- */
+render();
+</script>
+</body>
+</html>
