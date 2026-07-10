@@ -176,7 +176,9 @@ function hayMotor(){ return !!BACKEND_URL || !!clavePropia; }
 const MODELOS = ['gemini-2.5-flash','gemini-flash-latest','gemini-2.0-flash'];
 let modeloActivo = st.get('et:modelo') || MODELOS[0];
 
-async function llamadaCruda(via, modelo, contents, generationConfig){
+async function llamadaCruda(via, modelo, partes, generationConfig){
+  // Gemini espera contents:[{parts:[...]}] — las partes van envueltas
+  const contents=[{parts:partes}];
   let res;
   if(via==='backend'){
     res = await fetch(BACKEND_URL, {
