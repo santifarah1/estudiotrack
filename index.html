@@ -118,8 +118,12 @@
   .err{background:var(--error-claro);border:1.5px solid var(--error);border-radius:12px;padding:13px 15px;font-size:14px;margin-top:14px}
   .vacio{text-align:center;padding:36px 16px;color:#5A6780;font-size:14px}
   .vacio .emoji{font-size:44px;display:block;margin-bottom:10px}
-  .acciones-pie{display:flex;gap:10px;margin-top:26px}
-  .acciones-pie .btn{margin-top:0}
+  .acciones-pie{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
+  .acciones-pie .btn{margin-top:0;flex:1;min-width:130px}
+  .banner-repaso{display:flex;align-items:center;gap:8px;background:#EEF3FF;border:1.5px solid #7FA0E0;border-radius:12px;padding:11px 14px;font-size:13.5px;margin-top:14px}
+  .banner-repaso strong{font-weight:700}
+  .banner-repaso button{margin-left:auto;background:var(--tinta);color:var(--papel);border:none;border-radius:8px;padding:6px 12px;font-family:inherit;font-weight:600;font-size:13px;cursor:pointer;flex-shrink:0}
+  .btn.repaso-on{background:#3A5BA0;box-shadow:0 3px 0 #2A447D}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -160,6 +164,7 @@ let materias = J.get('et:materias', []);
 let racha = J.get('et:racha', {dias:0, ultima:null});
 let vista = {tipo:'inicio'};
 let archivosSubidos = [];
+let repasoLibre = false;   // cuando está activo, todos los nodos se desbloquean y no se marca progreso
 
 function datosMateria(id){ return J.get('et:m:'+id, null); }
 function guardarMateria(id, datos){ J.set('et:m:'+id, datos); }
@@ -279,12 +284,10 @@ function parsearJSON(texto){
   }
 }
 
-let ULTIMA_RESPUESTA_CRUDA='';
 async function iaJSON(prompt, maxTokens, sinJsonMime){
   const cfg={temperature:0.4, maxOutputTokens:maxTokens||3072};
   if(!sinJsonMime) cfg.responseMimeType='application/json';
   const texto = await gemini([{text:prompt}], cfg);
-  ULTIMA_RESPUESTA_CRUDA=texto;
   return parsearJSON(texto);
 }
 
@@ -690,18 +693,14 @@ function renderNueva(err){
     vista={tipo:'generando',msg:'Leyendo tus apuntes y armando el plan…'};render();
     try{
       const m={id:'m'+Date.now(),nombre,fecha,objetivo};
-      let plan=null, ultimoCrudo='';
+      let plan=null;
       for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
-        const p=await iaJSON(pPlan(m,apuntes),4096,true); // sin JSON-mime forzado
-        ultimoCrudo=ULTIMA_RESPUESTA_CRUDA;
+        const p=await iaJSON(pPlan(m,apuntes),4096,true);
         const unidades=(p&&p.unidades)||[];
         const conNodos=unidades.filter(u=>u.nodos&&u.nodos.length);
         if(unidades.length>=3 && conNodos.length>=3){ plan=p; break; }
       }
-      if(!plan){
-        const muestra=(ultimoCrudo||'(vacío)').slice(0,300);
-        throw new Error('La IA devolvió un plan corto. Esto es lo que respondió: '+muestra);
-      }
+      if(!plan) throw new Error('La IA armó un plan demasiado corto. Reintentá, o subí apuntes con un poco más de contenido.');
       materias.push(m);
       J.set('et:materias',materias);
       guardarMateria(m.id,{apuntes:recortar(apuntes,60000),plan,completados:{},contenido:{},usadas:{}});
@@ -742,8 +741,8 @@ function renderCamino(){
       const id=`${ui}-${ni}`;
       const idx=planos.findIndex(p=>p.id===id);
       const ok=!!d.completados[id];
-      const desbloq=ok||planos.slice(0,idx).every(p=>d.completados[p.id]);
-      const esActual=actual&&actual.id===id;
+      const desbloq=repasoLibre||ok||planos.slice(0,idx).every(p=>d.completados[p.id]);
+      const esActual=!repasoLibre&&actual&&actual.id===id;
       caminoHTML+=`
         <button class="nodo ${ok?'ok':''} ${!desbloq?'bloq':''} ${esActual?'actual':''}" data-id="${id}" ${!desbloq?'disabled':''}>
           <span class="icono">${iconoNodo(n.tipo)}</span>
@@ -769,15 +768,40 @@ function renderCamino(){
       <div class="barra-label">${pct}% del camino recorrido${pct===100?' — ¡a rendir tranquilo! 🎓':''}</div>
     </div>
     <div class="camino">${caminoHTML}</div>
+    ${repasoLibre?`<div class="banner-repaso">🔁 <span><strong>Modo repaso activo.</strong> Practicá cualquier nodo libremente; tu progreso no se toca.</span><button id="salir-repaso">Salir</button></div>`:''}
     <div class="acciones-pie">
-      <button class="btn sec chico" id="borrar">Borrar materia</button>
+      <button class="btn sec chico ${repasoLibre?'repaso-on':''}" id="repaso">${repasoLibre?'✓ Repaso':'🔁 Modo repaso'}</button>
+      <button class="btn sec chico" id="reiniciar">↺ Reiniciar camino</button>
+      <button class="btn sec chico" id="borrar">🗑 Borrar materia</button>
     </div>`;
   wireMarca();
-  document.getElementById('volver-inicio').onclick=()=>{vista={tipo:'inicio'};render();};
-  $app.querySelectorAll('.nodo:not(.bloq)').forEach(b=>{b.onclick=()=>abrirNodo(vista.id,b.dataset.id);});
+  document.getElementById('volver-inicio').onclick=()=>{repasoLibre=false;vista={tipo:'inicio'};render();};
+  $app.querySelectorAll('.nodo:not(.bloq)').forEach(b=>{
+    b.onclick=()=>{
+      const nodo=nodosPlanos(d).find(n=>n.id===b.dataset.id);
+      // en repaso, los quizzes/simulacro se regeneran con preguntas nuevas; las lecciones se reusan
+      const forzar = repasoLibre && nodo && nodo.tipo!=='leccion';
+      abrirNodo(vista.id,b.dataset.id,forzar);
+    };
+  });
+  const bs=document.getElementById('salir-repaso');
+  if(bs) bs.onclick=()=>{repasoLibre=false;render();};
+  document.getElementById('repaso').onclick=()=>{repasoLibre=!repasoLibre;render();};
+  document.getElementById('reiniciar').onclick=()=>{
+    if(confirm(`Esto vuelve "${m.nombre}" a 0% para hacerla de nuevo. Se conservan tus apuntes y el plan; los quizzes van a generar preguntas nuevas. ¿Seguimos?`)){
+      const d2=datosMateria(vista.id);
+      d2.completados={};
+      d2.contenido={};   // borra lecciones/quizzes cacheados -> se regeneran frescos
+      d2.usadas={};
+      guardarMateria(vista.id,d2);
+      repasoLibre=false;
+      render();
+    }
+  };
   document.getElementById('borrar').onclick=()=>{
     if(confirm(`Esto borra "${m.nombre}" con todo su progreso. ¿Seguimos?`)){
       borrarMateria(vista.id);
+      repasoLibre=false;
       vista={tipo:'inicio'};render();
     }
   };
@@ -838,16 +862,18 @@ function renderLeccion(){
         ${(c.puntos||[]).map(p=>`<div class="punto"><span class="b">›</span><span>${esc(p)}</span></div>`).join('')}
       </div>
       ${c.ejemplo?`<div class="ejemplo"><strong>Caso de examen</strong>${esc(c.ejemplo)}</div>`:''}
-      <button class="btn" id="listo">${d.completados[vista.nid]?'Volver al camino':'Entendido, siguiente ✓'}</button>
+      <button class="btn" id="listo">${repasoLibre?'Volver al camino (repaso)':(d.completados[vista.nid]?'Volver al camino':'Entendido, siguiente ✓')}</button>
     </div>`;
   wireMarca();
   document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
   document.getElementById('listo').onclick=()=>{
-    const d2=datosMateria(vista.mid);
-    if(!d2.completados[vista.nid]){
-      d2.completados[vista.nid]=true;
-      guardarMateria(vista.mid,d2);
-      marcarRacha();
+    if(!repasoLibre){
+      const d2=datosMateria(vista.mid);
+      if(!d2.completados[vista.nid]){
+        d2.completados[vista.nid]=true;
+        guardarMateria(vista.mid,d2);
+        marcarRacha();
+      }
     }
     vista={tipo:'camino',id:vista.mid};render();
   };
@@ -903,16 +929,23 @@ function renderResultado(total){
     <div class="card resultado">
       <div class="nota">${vista.aciertos}/${total}</div>
       <p><strong>${aprobado?'¡Aprobado!':'Todavía no'}</strong> — equivale a un ${nota} más o menos.</p>
-      <p class="sub">${aprobado?'Nodo completado. Seguí el camino.':'Necesitás 70% para avanzar. Repasá la lección y volvé a intentar: la IA genera preguntas nuevas.'}</p>
+      <p class="sub">${repasoLibre
+          ?'Modo repaso: practicaste este quiz sin afectar tu progreso.'
+          :(aprobado?'Nodo completado. Seguí el camino.':'Necesitás 70% para avanzar. Repasá la lección y volvé a intentar: la IA genera preguntas nuevas.')}</p>
       <div class="acciones-pie">
-        ${aprobado
-          ?`<button class="btn" id="seguir">Seguir el camino →</button>`
-          :`<button class="btn sec" id="volverBtn">Volver al camino</button>
-            <button class="btn" id="reint">Reintentar</button>`}
+        ${repasoLibre
+          ?`<button class="btn sec" id="volverBtn">Volver al camino</button><button class="btn" id="reint">Practicar otra vez</button>`
+          :(aprobado
+            ?`<button class="btn" id="seguir">Seguir el camino →</button>`
+            :`<button class="btn sec" id="volverBtn">Volver al camino</button>
+              <button class="btn" id="reint">Reintentar</button>`)}
       </div>
     </div>`;
   wireMarca();
-  if(aprobado){
+  if(repasoLibre){
+    document.getElementById('volverBtn').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+    document.getElementById('reint').onclick=()=>abrirNodo(vista.mid,vista.nid,true);
+  }else if(aprobado){
     document.getElementById('seguir').onclick=()=>{
       const d=datosMateria(vista.mid);
       d.completados[vista.nid]=true;
