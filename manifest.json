@@ -1,0 +1,17 @@
+{
+  "name": "EstudioTrack",
+  "short_name": "EstudioTrack",
+  "description": "Tu camino al examen, armado con IA. Subís tus apuntes y estudiás con lecciones, quizzes y simulacros.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAFAF6",
+  "theme_color": "#1B2A4A",
+  "lang": "es-AR",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
