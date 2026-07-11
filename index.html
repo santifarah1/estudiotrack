@@ -19,6 +19,21 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Inter',system-ui,sans-serif;background:var(--papel);color:var(--tinta);min-height:100vh;line-height:1.5}
   .wrap{max-width:520px;margin:0 auto;padding:20px 16px 80px}
+  /* --- layout de escritorio: dos columnas cuando hay panel lateral --- */
+  @media (min-width:900px){
+    .wrap.split{max-width:1040px}
+    .split .split-grid{display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start}
+    .split .panel-camino{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow-y:auto;padding-right:4px}
+    .split .panel-camino .camino{margin-top:14px}
+    .split .panel-camino .materia-head h2{font-size:20px}
+    .split .panel-camino .nodo{padding:11px 13px}
+    .split .panel-camino .nodo .icono{width:32px;height:32px;font-size:16px}
+    .split .panel-camino .nodo .tit{font-size:13.5px}
+    .split .panel-contenido{min-width:0}
+    .split .panel-contenido .card{margin-top:0}
+    .split .panel-camino .acciones-pie{margin-top:18px}
+    .split .panel-camino .acciones-pie .btn{font-size:12.5px;padding:8px 10px;min-width:0}
+  }
   h1,h2,h3{font-family:'Bricolage Grotesque','Inter',sans-serif}
   .marca{display:flex;align-items:center;gap:8px;margin-bottom:6px}
   .marca .logo{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:22px;position:relative;display:inline-block;padding:0 4px;cursor:pointer}
@@ -81,6 +96,7 @@
   .nodo.bloq{opacity:.5;cursor:not-allowed}
   .nodo.bloq::before{border-color:#C9CFDC}
   .nodo.actual{border-color:var(--tinta);border-width:2px}
+  .nodo.sel{border-color:var(--tinta);border-width:2px;background:#FFFDF3}
   .nodo.actual::after{content:"ACÁ";position:absolute;top:-9px;right:12px;font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:10px;letter-spacing:.1em;background:var(--resaltador);padding:2px 8px;border-radius:6px}
   .nodo .icono{width:38px;height:38px;flex-shrink:0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;background:var(--papel);border:1.5px solid var(--borde)}
   .nodo.ok .icono{background:var(--aprobado-claro);border-color:var(--aprobado)}
@@ -118,6 +134,36 @@
   .err{background:var(--error-claro);border:1.5px solid var(--error);border-radius:12px;padding:13px 15px;font-size:14px;margin-top:14px}
   .vacio{text-align:center;padding:36px 16px;color:#5A6780;font-size:14px}
   .vacio .emoji{font-size:44px;display:block;margin-bottom:10px}
+  /* --- seguí acá (qué toca hoy) --- */
+  .seguir-hoy{background:var(--tinta);color:var(--papel);border:none;border-radius:16px;padding:18px 20px;width:100%;text-align:left;cursor:pointer;font-family:inherit;box-shadow:0 3px 0 #0F1B33;display:flex;align-items:center;gap:14px;margin-top:14px}
+  .seguir-hoy:active{transform:translateY(2px);box-shadow:0 1px 0 #0F1B33}
+  .seguir-hoy .ico{font-size:30px;flex-shrink:0}
+  .seguir-hoy .tx{flex:1;min-width:0}
+  .seguir-hoy .et{font-family:'Bricolage Grotesque',sans-serif;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.7}
+  .seguir-hoy .ti{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:18px;line-height:1.2;margin-top:2px}
+  .seguir-hoy .ma{font-size:12.5px;opacity:.75;margin-top:3px}
+  .seguir-hoy .flecha{font-size:22px;opacity:.8}
+  /* --- meta diaria --- */
+  .meta-diaria{display:flex;align-items:center;gap:14px;background:var(--carta);border:1.5px solid var(--borde);border-radius:16px;padding:14px 16px;box-shadow:var(--sombra);margin-top:14px}
+  .anillo{--p:0;width:52px;height:52px;flex-shrink:0;border-radius:50%;background:conic-gradient(var(--aprobado) calc(var(--p)*1%), #EDECE4 0);display:flex;align-items:center;justify-content:center;position:relative}
+  .anillo::after{content:"";width:40px;height:40px;background:var(--carta);border-radius:50%;position:absolute}
+  .anillo span{position:relative;z-index:1;font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:14px}
+  .anillo.ok{--p:100}
+  .meta-diaria .info{flex:1;min-width:0}
+  .meta-diaria .info .t{font-weight:700;font-size:14.5px}
+  .meta-diaria .info .s{font-size:12.5px;color:#5A6780;margin-top:1px}
+  .meta-diaria .cfg{background:none;border:none;cursor:pointer;font-size:16px;color:#8A93A5;padding:4px}
+  .meta-diaria.cumplida{background:var(--aprobado-claro);border-color:var(--aprobado)}
+  .meta-editor{background:var(--carta);border:1.5px solid var(--borde);border-radius:16px;padding:16px;box-shadow:var(--sombra);margin-top:14px}
+  .meta-editor .t{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:15px;margin-bottom:3px}
+  .meta-editor .s{font-size:12.5px;color:#5A6780;margin-bottom:12px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{flex:1;min-width:60px;border:1.5px solid var(--borde);background:var(--papel);border-radius:12px;padding:12px 8px;text-align:center;cursor:pointer;font-family:inherit;transition:transform .1s ease}
+  .chip:active{transform:scale(.96)}
+  .chip .num{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:22px;line-height:1}
+  .chip .lbl{font-size:11px;color:#5A6780;margin-top:2px}
+  .chip.sel{background:var(--tinta);border-color:var(--tinta);color:var(--papel)}
+  .chip.sel .lbl{color:rgba(255,255,255,.8)}
   .acciones-pie{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
   .acciones-pie .btn{margin-top:0;flex:1;min-width:130px}
   .banner-repaso{display:flex;align-items:center;gap:8px;background:#EEF3FF;border:1.5px solid #7FA0E0;border-radius:12px;padding:11px 14px;font-size:13.5px;margin-top:14px}
@@ -162,6 +208,8 @@ const J = {
 let clavePropia = st.get('et:key') || '';
 let materias = J.get('et:materias', []);
 let racha = J.get('et:racha', {dias:0, ultima:null});
+let metaDiaria = J.get('et:meta', {objetivo:2, dia:null, hechos:0});  // nodos completados hoy
+let editandoMeta = false;
 let vista = {tipo:'inicio'};
 let archivosSubidos = [];
 let repasoLibre = false;   // cuando está activo, todos los nodos se desbloquean y no se marca progreso
@@ -494,13 +542,39 @@ function diasRestantes(fecha){
   const f=new Date(fecha+'T00:00:00');
   return Math.max(0,Math.round((f-hoy)/86400000));
 }
+function hoyISO(){ return new Date().toISOString().slice(0,10); }
 function marcarRacha(){
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=hoyISO();
+  // contar el nodo del día (para la meta diaria) siempre
+  if(metaDiaria.dia!==hoy){ metaDiaria.dia=hoy; metaDiaria.hechos=0; }
+  metaDiaria.hechos++;
+  J.set('et:meta',metaDiaria);
+  // la racha se incrementa una vez por día
   if(racha.ultima===hoy) return;
   const ayer=new Date(Date.now()-86400000).toISOString().slice(0,10);
   racha.dias=(racha.ultima===ayer)?racha.dias+1:1;
   racha.ultima=hoy;
   J.set('et:racha',racha);
+}
+function metaHoy(){
+  const hoy=hoyISO();
+  const hechos = metaDiaria.dia===hoy ? metaDiaria.hechos : 0;
+  return {hechos, objetivo:metaDiaria.objetivo||2, cumplida:hechos>=(metaDiaria.objetivo||2)};
+}
+function setObjetivoMeta(n){
+  metaDiaria.objetivo=n;
+  J.set('et:meta',metaDiaria);
+}
+// devuelve {materia, nodo} del próximo nodo pendiente de cualquier materia, o null
+function proximoNodoGlobal(){
+  for(const m of materias){
+    const d=datosMateria(m.id);
+    if(!d||!d.plan) continue;
+    const planos=nodosPlanos(d);
+    const prox=planos.find(n=>!d.completados[n.id]);
+    if(prox) return {materia:m, nodo:prox};
+  }
+  return null;
 }
 function barajar(preguntas){
   const mezcla=[...preguntas].sort(()=>Math.random()-.5);
@@ -536,6 +610,7 @@ function wireMarca(){
 
 /* ---------- inicio ---------- */
 function renderInicio(){
+  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
   let lista='';
   if(!materias.length){
     lista=`<div class="vacio"><span class="emoji">🎓</span>Todavía no tenés materias.<br>Creá la primera y subí tus apuntes.</div>`;
@@ -562,8 +637,49 @@ function renderInicio(){
       </button>`;
     }).join('');
   }
+  // --- "seguí acá": próximo nodo pendiente de cualquier materia ---
+  const prox=proximoNodoGlobal();
+  let seguirHTML='';
+  if(prox){
+    seguirHTML=`<button class="seguir-hoy" id="seguir-hoy">
+      <span class="ico">${iconoNodo(prox.nodo.tipo)}</span>
+      <span class="tx">
+        <span class="et">Seguí acá</span>
+        <span class="ti">${esc(prox.nodo.titulo)}</span>
+        <span class="ma">${esc(prox.materia.nombre)} · ${nombreTipo(prox.nodo.tipo)}</span>
+      </span>
+      <span class="flecha">→</span>
+    </button>`;
+  }
+  // --- meta diaria ---
+  let metaHTML='';
+  if(materias.length){
+    const mh=metaHoy();
+    const p=Math.min(100,Math.round(mh.hechos/mh.objetivo*100));
+    metaHTML=`<div class="meta-diaria ${mh.cumplida?'cumplida':''}">
+      <div class="anillo ${mh.cumplida?'ok':''}" style="--p:${p}"><span>${mh.hechos}/${mh.objetivo}</span></div>
+      <div class="info">
+        <div class="t">${mh.cumplida?'¡Meta del día cumplida! 🎉':'Meta de hoy'}</div>
+        <div class="s">${mh.cumplida?'Seguí sumando si querés, ya cumpliste.':`Completá ${mh.objetivo-mh.hechos} nodo${(mh.objetivo-mh.hechos)===1?'':'s'} más hoy`}</div>
+      </div>
+      <button class="cfg" id="cfg-meta" title="Cambiar meta">⚙️</button>
+    </div>`;
+    if(editandoMeta){
+      const obj=mh.objetivo;
+      const ops=[{n:1,l:'tranqui'},{n:2,l:'normal'},{n:3,l:'a full'},{n:5,l:'crack'}];
+      metaHTML+=`<div class="meta-editor">
+        <div class="t">¿Cuántos nodos por día?</div>
+        <div class="s">Cada lección o quiz completado suma uno.</div>
+        <div class="chips">
+          ${ops.map(o=>`<button class="chip ${o.n===obj?'sel':''}" data-meta="${o.n}"><div class="num">${o.n}</div><div class="lbl">${o.l}</div></button>`).join('')}
+        </div>
+      </div>`;
+    }
+  }
   $app.innerHTML=`
     ${marcaHTML()}
+    ${seguirHTML}
+    ${metaHTML}
     <div class="card">
       <h2>Tus materias</h2>
       <p class="sub">Tocá una para seguir el camino donde lo dejaste.</p>
@@ -572,6 +688,13 @@ function renderInicio(){
       ${!hayMotor()?`<p class="hint" style="margin-top:10px">⚙️ La app no tiene motor de IA configurado todavía. Entrá a Ajustes.</p>`:''}
     </div>`;
   wireMarca();
+  const sh=document.getElementById('seguir-hoy');
+  if(sh) sh.onclick=()=>{ vista={tipo:'camino',id:prox.materia.id}; render(); };
+  const cm=document.getElementById('cfg-meta');
+  if(cm) cm.onclick=()=>{ editandoMeta=!editandoMeta; render(); };
+  document.querySelectorAll('.chip[data-meta]').forEach(c=>{
+    c.onclick=()=>{ setObjetivoMeta(+c.dataset.meta); editandoMeta=false; render(); };
+  });
   document.getElementById('nueva').onclick=()=>{
     if(!hayMotor()){vista={tipo:'ajustes',volver:{tipo:'nueva'}};render();return;}
     archivosSubidos=[];
@@ -584,6 +707,7 @@ function renderInicio(){
 
 /* ---------- ajustes ---------- */
 function renderAjustes(err){
+  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
   const volver=vista.volver||{tipo:'inicio'};
   const estadoBackend = BACKEND_URL
     ? `<div class="estado-motor"><span class="punto-v"></span>Motor compartido activo — no tenés que configurar nada. Si alguna vez se satura, podés usar tu propia clave como plan B acá abajo.</div>`
@@ -635,6 +759,7 @@ function renderAjustes(err){
 
 /* ---------- nueva materia ---------- */
 function renderNueva(err){
+  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
   const hoyMas7=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
   $app.innerHTML=`
     ${marcaHTML()}
@@ -714,6 +839,7 @@ function renderNueva(err){
 
 /* ---------- loading ---------- */
 function renderCargando(msg){
+  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
   $app.innerHTML=`${marcaHTML()}
     <div class="card cargando">
       <span class="lapiz">✏️</span>
@@ -724,27 +850,24 @@ function renderCargando(msg){
 }
 
 /* ---------- camino ---------- */
-function renderCamino(){
-  const m=materias.find(x=>x.id===vista.id);
-  const d=datosMateria(vista.id);
-  if(!m||!d||!d.plan){vista={tipo:'inicio'};render();return;}
-  const planos=nodosPlanos(d);
-  const hechos=planos.filter(n=>d.completados[n.id]).length;
-  const pct=Math.round(hechos/planos.length*100);
-  const actual=planos.find(n=>!d.completados[n.id]);
-  const dias=diasRestantes(m.fecha);
+function esDesktop(){ return window.matchMedia('(min-width:900px)').matches; }
 
-  let caminoHTML='';
+// construye el HTML del camino (columna de nodos). Si compacto, sin acciones grandes.
+function caminoHTML(m,d){
+  const planos=nodosPlanos(d);
+  const actual=planos.find(n=>!d.completados[n.id]);
+  let html='';
   d.plan.unidades.forEach((u,ui)=>{
-    caminoHTML+=`<div class="unidad-titulo">${esc(u.titulo)}</div>`;
+    html+=`<div class="unidad-titulo">${esc(u.titulo)}</div>`;
     u.nodos.forEach((n,ni)=>{
       const id=`${ui}-${ni}`;
       const idx=planos.findIndex(p=>p.id===id);
       const ok=!!d.completados[id];
       const desbloq=repasoLibre||ok||planos.slice(0,idx).every(p=>d.completados[p.id]);
       const esActual=!repasoLibre&&actual&&actual.id===id;
-      caminoHTML+=`
-        <button class="nodo ${ok?'ok':''} ${!desbloq?'bloq':''} ${esActual?'actual':''}" data-id="${id}" ${!desbloq?'disabled':''}>
+      const seleccionado=(vista.nid===id&&(vista.tipo==='leccion'||vista.tipo==='quiz'));
+      html+=`
+        <button class="nodo ${ok?'ok':''} ${!desbloq?'bloq':''} ${esActual?'actual':''} ${seleccionado?'sel':''}" data-id="${id}" ${!desbloq?'disabled':''}>
           <span class="icono">${iconoNodo(n.tipo)}</span>
           <span class="txt">
             <span class="tipo">${nombreTipo(n.tipo)}</span><br>
@@ -754,10 +877,16 @@ function renderCamino(){
         </button>`;
     });
   });
+  return html;
+}
 
-  $app.innerHTML=`
-    ${marcaHTML()}
-    <button class="volver" id="volver-inicio">← Mis materias</button>
+// cabecera de la materia (progreso, días, objetivo)
+function cabeceraHTML(m,d){
+  const planos=nodosPlanos(d);
+  const hechos=planos.filter(n=>d.completados[n.id]).length;
+  const pct=Math.round(hechos/planos.length*100);
+  const dias=diasRestantes(m.fecha);
+  return `
     <div class="materia-head">
       <h2>${esc(m.nombre)}</h2>
       <div class="meta">
@@ -766,45 +895,98 @@ function renderCamino(){
       </div>
       <div class="barra"><div style="width:${pct}%"></div></div>
       <div class="barra-label">${pct}% del camino recorrido${pct===100?' — ¡a rendir tranquilo! 🎓':''}</div>
-    </div>
-    <div class="camino">${caminoHTML}</div>
-    ${repasoLibre?`<div class="banner-repaso">🔁 <span><strong>Modo repaso activo.</strong> Practicá cualquier nodo libremente; tu progreso no se toca.</span><button id="salir-repaso">Salir</button></div>`:''}
+    </div>`;
+}
+
+function accionesHTML(){
+  return `
     <div class="acciones-pie">
       <button class="btn sec chico ${repasoLibre?'repaso-on':''}" id="repaso">${repasoLibre?'✓ Repaso':'🔁 Modo repaso'}</button>
       <button class="btn sec chico" id="reiniciar">↺ Reiniciar camino</button>
       <button class="btn sec chico" id="borrar">🗑 Borrar materia</button>
     </div>`;
-  wireMarca();
-  document.getElementById('volver-inicio').onclick=()=>{repasoLibre=false;vista={tipo:'inicio'};render();};
-  $app.querySelectorAll('.nodo:not(.bloq)').forEach(b=>{
+}
+
+// cablea los botones del camino y de acciones (sirve para móvil y para el panel de desktop)
+function wireCamino(m,d){
+  const vi=document.getElementById('volver-inicio');
+  if(vi) vi.onclick=()=>{repasoLibre=false;vista={tipo:'inicio'};render();};
+  document.querySelectorAll('.nodo:not(.bloq)').forEach(b=>{
     b.onclick=()=>{
       const nodo=nodosPlanos(d).find(n=>n.id===b.dataset.id);
-      // en repaso, los quizzes/simulacro se regeneran con preguntas nuevas; las lecciones se reusan
       const forzar = repasoLibre && nodo && nodo.tipo!=='leccion';
-      abrirNodo(vista.id,b.dataset.id,forzar);
+      abrirNodo(vista.id||m.id,b.dataset.id,forzar);
     };
   });
   const bs=document.getElementById('salir-repaso');
   if(bs) bs.onclick=()=>{repasoLibre=false;render();};
-  document.getElementById('repaso').onclick=()=>{repasoLibre=!repasoLibre;render();};
-  document.getElementById('reiniciar').onclick=()=>{
+  const br=document.getElementById('repaso');
+  if(br) br.onclick=()=>{repasoLibre=!repasoLibre;render();};
+  const bre=document.getElementById('reiniciar');
+  if(bre) bre.onclick=()=>{
     if(confirm(`Esto vuelve "${m.nombre}" a 0% para hacerla de nuevo. Se conservan tus apuntes y el plan; los quizzes van a generar preguntas nuevas. ¿Seguimos?`)){
-      const d2=datosMateria(vista.id);
-      d2.completados={};
-      d2.contenido={};   // borra lecciones/quizzes cacheados -> se regeneran frescos
-      d2.usadas={};
-      guardarMateria(vista.id,d2);
+      const d2=datosMateria(m.id);
+      d2.completados={}; d2.contenido={}; d2.usadas={};
+      guardarMateria(m.id,d2);
       repasoLibre=false;
+      vista={tipo:'camino',id:m.id};
       render();
     }
   };
-  document.getElementById('borrar').onclick=()=>{
+  const bb=document.getElementById('borrar');
+  if(bb) bb.onclick=()=>{
     if(confirm(`Esto borra "${m.nombre}" con todo su progreso. ¿Seguimos?`)){
-      borrarMateria(vista.id);
+      borrarMateria(m.id);
       repasoLibre=false;
       vista={tipo:'inicio'};render();
     }
   };
+}
+
+function renderCamino(){
+  const m=materias.find(x=>x.id===vista.id);
+  const d=datosMateria(vista.id);
+  if(!m||!d||!d.plan){vista={tipo:'inicio'};render();return;}
+  document.querySelector('.wrap').classList.remove('split');
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver-inicio">← Mis materias</button>
+    ${cabeceraHTML(m,d)}
+    <div class="camino">${caminoHTML(m,d)}</div>
+    ${repasoLibre?`<div class="banner-repaso">🔁 <span><strong>Modo repaso activo.</strong> Practicá cualquier nodo libremente; tu progreso no se toca.</span><button id="salir-repaso">Salir</button></div>`:''}
+    ${accionesHTML()}`;
+  wireMarca();
+  wireCamino(m,d);
+}
+
+// arma la vista de contenido (lección/quiz). En desktop, con el camino al lado.
+function pintarContenido(contenidoHTML, wireContenido){
+  const m=materias.find(x=>x.id===vista.mid);
+  const d=datosMateria(vista.mid);
+  const wrap=document.querySelector('.wrap');
+  if(esDesktop() && m && d && d.plan){
+    wrap.classList.add('split');
+    $app.innerHTML=`
+      ${marcaHTML()}
+      <div class="split-grid">
+        <div class="panel-camino">
+          <button class="volver" id="volver-inicio">← Mis materias</button>
+          ${cabeceraHTML(m,d)}
+          <div class="camino">${caminoHTML(m,d)}</div>
+          ${repasoLibre?`<div class="banner-repaso">🔁 <span><strong>Repaso activo.</strong></span><button id="salir-repaso">Salir</button></div>`:''}
+          ${accionesHTML()}
+        </div>
+        <div class="panel-contenido">${contenidoHTML}</div>
+      </div>`;
+    wireMarca();
+    wireCamino(m,d);
+    wireContenido();
+  }else{
+    wrap.classList.remove('split');
+    $app.innerHTML=`${marcaHTML()}${contenidoHTML}`;
+    wireMarca();
+    wireContenido();
+  }
 }
 
 /* ---------- abrir nodo ---------- */
@@ -852,8 +1034,7 @@ async function abrirNodo(mid, nid, forzarNuevo){
 function renderLeccion(){
   const c=vista.contenido;
   const d=datosMateria(vista.mid);
-  $app.innerHTML=`
-    ${marcaHTML()}
+  const html=`
     <button class="volver" id="volver">← Volver al camino</button>
     <div class="card contenido">
       <h2>${esc(vista.nodo.titulo)}</h2>
@@ -862,21 +1043,23 @@ function renderLeccion(){
         ${(c.puntos||[]).map(p=>`<div class="punto"><span class="b">›</span><span>${esc(p)}</span></div>`).join('')}
       </div>
       ${c.ejemplo?`<div class="ejemplo"><strong>Caso de examen</strong>${esc(c.ejemplo)}</div>`:''}
-      <button class="btn" id="listo">${repasoLibre?'Volver al camino (repaso)':(d.completados[vista.nid]?'Volver al camino':'Entendido, siguiente ✓')}</button>
+      <button class="btn" id="listo">${repasoLibre?'Listo (repaso)':(d.completados[vista.nid]?'Volver al camino':'Entendido, siguiente ✓')}</button>
     </div>`;
-  wireMarca();
-  document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
-  document.getElementById('listo').onclick=()=>{
-    if(!repasoLibre){
-      const d2=datosMateria(vista.mid);
-      if(!d2.completados[vista.nid]){
-        d2.completados[vista.nid]=true;
-        guardarMateria(vista.mid,d2);
-        marcarRacha();
+  pintarContenido(html, ()=>{
+    const bv=document.getElementById('volver');
+    if(bv) bv.onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+    document.getElementById('listo').onclick=()=>{
+      if(!repasoLibre){
+        const d2=datosMateria(vista.mid);
+        if(!d2.completados[vista.nid]){
+          d2.completados[vista.nid]=true;
+          guardarMateria(vista.mid,d2);
+          marcarRacha();
+        }
       }
-    }
-    vista={tipo:'camino',id:vista.mid};render();
-  };
+      vista={tipo:'camino',id:vista.mid};render();
+    };
+  });
 }
 
 /* ---------- quiz / simulacro ---------- */
@@ -884,8 +1067,7 @@ function renderQuiz(){
   const total=vista.preguntas.length;
   if(vista.i>=total){renderResultado(total);return;}
   const q=vista.preguntas[vista.i];
-  $app.innerHTML=`
-    ${marcaHTML()}
+  const html=`
     <button class="volver" id="volver">← Volver al camino</button>
     <div class="card">
       <div class="q-num">${nombreTipo(vista.nodo.tipo)} · Pregunta ${vista.i+1} de ${total}</div>
@@ -895,9 +1077,10 @@ function renderQuiz(){
       </div>
       <div id="feedback"></div>
     </div>`;
-  wireMarca();
-  document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
-  $app.querySelectorAll('.opcion').forEach(btn=>{
+  pintarContenido(html, ()=>{
+  const bv=document.getElementById('volver');
+  if(bv) bv.onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+  document.querySelectorAll('.opcion').forEach(btn=>{
     btn.onclick=()=>{
       if(vista.respondida)return;
       vista.respondida=true;
@@ -918,14 +1101,14 @@ function renderQuiz(){
       document.getElementById('sig').onclick=()=>{vista.i++;vista.respondida=false;render();};
     };
   });
+  });
 }
 
 function renderResultado(total){
   const pct=Math.round(vista.aciertos/total*100);
   const aprobado=pct>=70;
   const nota=Math.max(1,Math.round(pct/10));
-  $app.innerHTML=`
-    ${marcaHTML()}
+  const html=`
     <div class="card resultado">
       <div class="nota">${vista.aciertos}/${total}</div>
       <p><strong>${aprobado?'¡Aprobado!':'Todavía no'}</strong> — equivale a un ${nota} más o menos.</p>
@@ -941,25 +1124,33 @@ function renderResultado(total){
               <button class="btn" id="reint">Reintentar</button>`)}
       </div>
     </div>`;
-  wireMarca();
-  if(repasoLibre){
-    document.getElementById('volverBtn').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
-    document.getElementById('reint').onclick=()=>abrirNodo(vista.mid,vista.nid,true);
-  }else if(aprobado){
-    document.getElementById('seguir').onclick=()=>{
-      const d=datosMateria(vista.mid);
-      d.completados[vista.nid]=true;
-      guardarMateria(vista.mid,d);
-      marcarRacha();
-      vista={tipo:'camino',id:vista.mid};render();
-    };
-  }else{
-    document.getElementById('volverBtn').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
-    document.getElementById('reint').onclick=()=>abrirNodo(vista.mid,vista.nid,true);
-  }
+  pintarContenido(html, ()=>{
+    if(repasoLibre){
+      document.getElementById('volverBtn').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+      document.getElementById('reint').onclick=()=>abrirNodo(vista.mid,vista.nid,true);
+    }else if(aprobado){
+      document.getElementById('seguir').onclick=()=>{
+        const d=datosMateria(vista.mid);
+        d.completados[vista.nid]=true;
+        guardarMateria(vista.mid,d);
+        marcarRacha();
+        vista={tipo:'camino',id:vista.mid};render();
+      };
+    }else{
+      document.getElementById('volverBtn').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+      document.getElementById('reint').onclick=()=>abrirNodo(vista.mid,vista.nid,true);
+    }
+  });
 }
 
 /* ---------- arranque ---------- */
+let _rt;
+window.addEventListener('resize',()=>{
+  clearTimeout(_rt);
+  _rt=setTimeout(()=>{
+    if(vista.tipo==='leccion'||vista.tipo==='quiz'||vista.tipo==='camino') render();
+  },200);
+});
 render();
 </script>
 </body>
