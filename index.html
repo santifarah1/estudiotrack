@@ -203,6 +203,9 @@
   .logros-resumen .lr-t{font-weight:700;font-size:14.5px}
   .logros-resumen .lr-s{font-size:12.5px;color:#5A6780;margin-top:1px}
   .logros-resumen .lr-fl{font-size:18px;opacity:.5}
+  .codigo-box{background:var(--papel);border:1.5px solid var(--borde);border-radius:12px;padding:12px;font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;max-height:120px;overflow-y:auto;color:#5A6780;margin-top:10px}
+  .info-cuota{background:#EEF3FF;border:1.5px solid #7FA0E0;border-radius:12px;padding:13px 15px;font-size:13px;margin-top:12px;line-height:1.45}
+  .info-cuota strong{display:block;margin-bottom:4px}
   .aviso-clave{display:flex;align-items:center;gap:12px;width:100%;text-align:left;font-family:inherit;background:#FFF9E3;border:1.5px solid #E8C22E;border-radius:14px;padding:14px 16px;margin-top:14px;cursor:pointer;color:var(--tinta);box-shadow:var(--sombra)}
   .aviso-clave .ac-ico{font-size:22px}
   .aviso-clave .ac-tx{flex:1;font-size:13.5px;line-height:1.4}
@@ -254,6 +257,87 @@ let racha = J.get('et:racha', {dias:0, ultima:null});
 let metaDiaria = J.get('et:meta', {objetivo:2, dia:null, hechos:0});  // nodos completados hoy
 let editandoMeta = false;
 let logros = J.get('et:logros', {});   // {id: fechaISO}
+
+/* =========================================================
+   COMPARTIR MATERIAS
+   Exporta plan + apuntes + contenido ya generado.
+   Quien lo importa NO gasta cuota en regenerar nada.
+   ========================================================= */
+function bytesABase64(bytes){
+  let bin='';
+  const chunk=8192;
+  for(let i=0;i<bytes.length;i+=chunk){
+    bin+=String.fromCharCode.apply(null, bytes.subarray(i,i+chunk));
+  }
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function base64ABytes(txt){
+  let b=txt.trim().replace(/-/g,'+').replace(/_/g,'/');
+  while(b.length%4) b+='=';
+  const bin=atob(b);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return bytes;
+}
+// comprime con gzip nativo del navegador: un código de 20k caracteres queda en ~600
+async function codificar(obj){
+  const json=JSON.stringify(obj);
+  const datos=new TextEncoder().encode(json);
+  if(typeof CompressionStream==='undefined'){
+    return 'R0_'+bytesABase64(datos);   // sin compresión (navegador viejo)
+  }
+  const cs=new CompressionStream('gzip');
+  const w=cs.writable.getWriter();
+  w.write(datos); w.close();
+  const comprimido=new Uint8Array(await new Response(cs.readable).arrayBuffer());
+  return 'R1_'+bytesABase64(comprimido);
+}
+async function decodificar(txt){
+  const t=txt.trim();
+  if(t.startsWith('R0_')){
+    return JSON.parse(new TextDecoder().decode(base64ABytes(t.slice(3))));
+  }
+  if(!t.startsWith('R1_')) throw new Error('El código no tiene el formato de EstudioTrack');
+  const bytes=base64ABytes(t.slice(3));
+  const ds=new DecompressionStream('gzip');
+  const w=ds.writable.getWriter();
+  w.write(bytes); w.close();
+  const json=await new Response(ds.readable).text();
+  return JSON.parse(json);
+}
+
+async function exportarMateria(mid){
+  const m=materias.find(x=>x.id===mid);
+  const d=datosMateria(mid);
+  if(!m||!d) return null;
+  return await codificar({
+    v:1,
+    nombre:m.nombre,
+    fecha:m.fecha,
+    objetivo:m.objetivo,
+    apuntes:d.apuntes,
+    plan:d.plan,
+    contenido:d.contenido||{},   // lecciones y quizzes ya generados: el que importa no gasta cuota
+    usadas:d.usadas||{}
+  });
+}
+
+async function importarMateria(codigo){
+  const p=await decodificar(codigo);
+  if(!p||!p.plan||!p.plan.unidades) throw new Error('El código no es válido o está incompleto');
+  const id='m'+Date.now();
+  const m={id, nombre:p.nombre||'Materia importada', fecha:p.fecha||new Date().toISOString().slice(0,10), objetivo:p.objetivo||'8+'};
+  materias.push(m);
+  J.set('et:materias',materias);
+  guardarMateria(id,{
+    apuntes:p.apuntes||'',
+    plan:p.plan,
+    completados:{},              // el progreso es de cada uno, arranca en cero
+    contenido:p.contenido||{},
+    usadas:p.usadas||{}
+  });
+  return m;
+}
 
 /* =========================================================
    LOGROS
@@ -789,6 +873,8 @@ function barajar(preguntas){
 function render(){
   const t=vista.tipo;
   if(t==='inicio')renderInicio();
+  else if(t==='compartir')renderCompartir();
+  else if(t==='importar')renderImportar();
   else if(t==='logros')renderLogros();
   else if(t==='ajustes')renderAjustes();
   else if(t==='nueva')renderNueva();
@@ -896,6 +982,7 @@ function renderInicio(){
       <p class="sub">Tocá una para seguir el camino donde lo dejaste.</p>
       ${lista}
       <button class="btn" id="nueva">+ Nueva materia</button>
+      <button class="btn sec" id="importar-btn">📥 Importar materia de un compañero</button>
     </div>
     ${!tieneClavePropia()?`<button class="aviso-clave" id="ir-clave">
         <span class="ac-ico">🔑</span>
@@ -903,6 +990,8 @@ function renderInicio(){
         <span class="ac-fl">→</span>
       </button>`:''}`;
   wireMarca();
+  const ib=document.getElementById('importar-btn');
+  if(ib) ib.onclick=()=>{ vista={tipo:'importar'}; render(); };
   const vl=document.getElementById('ver-logros');
   if(vl) vl.onclick=()=>{ vista={tipo:'logros'}; render(); };
   const ic=document.getElementById('ir-clave');
@@ -946,6 +1035,11 @@ function renderAjustes(err){
       <label for="clave">Pegá tu clave acá</label>
       <input id="clave" type="password" placeholder="AIza… o AQ.…" value="${esc(clavePropia)}">
       <p class="hint">Se guarda solo en este dispositivo, nadie más la ve. En el plan gratuito, Google puede usar lo que envíes para mejorar sus modelos: no subas nada privado.</p>
+      <div class="info-cuota">
+        <strong>📊 Cómo funciona la cuota gratuita</strong>
+        Tu clave tiene un límite de pedidos por día (depende de tu cuenta de Google). La app consume 1 pedido al armar el camino y 1 por cada unidad que abrís, así que rinde bastante. Si se te acaba, se renueva a la madrugada.<br><br>
+        <strong>Truco:</strong> si un compañero ya armó la materia, que te pase el código con "Compartir" — te llega con el contenido hecho y <strong>no gastás nada de tu cuota</strong>.
+      </div>
       <div id="err-clave">${err?`<div class="err">${esc(err)}</div>`:''}</div>
       <button class="btn" id="guardar">Guardar y probar</button>
       ${tiene?'<button class="btn sec" id="quitar-clave">Quitar mi clave</button>':''}
@@ -973,6 +1067,115 @@ function renderAjustes(err){
       clavePropia=anterior;
       btn.disabled=false;btn.textContent='Guardar y probar';
       document.getElementById('err-clave').innerHTML=`<div class="err">${esc(mensajeError(e))}</div>`;
+    }
+  };
+}
+
+/* ---------- compartir materia ---------- */
+async function renderCompartir(){
+  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
+  const m=materias.find(x=>x.id===vista.id);
+  if(!m){vista={tipo:'inicio'};render();return;}
+  $app.innerHTML=`${marcaHTML()}
+    <div class="card cargando"><span class="lapiz">📤</span><p>Preparando el código…</p></div>`;
+  wireMarca();
+
+  let codigo;
+  try{ codigo=await exportarMateria(vista.id); }
+  catch(e){ codigo=null; }
+  if(!codigo){
+    $app.innerHTML=`${marcaHTML()}<div class="card"><h2>Ups</h2><p class="sub">No pude generar el código.</p><button class="btn sec" id="v">Volver</button></div>`;
+    wireMarca();
+    document.getElementById('v').onclick=()=>{vista={tipo:'camino',id:m.id};render();};
+    return;
+  }
+
+  const d=datosMateria(vista.id);
+  const nodosListos=Object.keys(d.contenido||{}).length;
+  const totalNodos=nodosPlanos(d).length;
+
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver">← Volver</button>
+    <div class="card">
+      <h2>Compartir "${esc(m.nombre)}"</h2>
+      <p class="sub">Pasale este código a un amigo y va a tener la materia entera, lista para estudiar.</p>
+      <div class="info-cuota">
+        <strong>💡 Por qué conviene compartir</strong>
+        Cada uno usa su propia clave gratuita de Gemini, que tiene un límite de pedidos por día. Cuando compartís una materia, va con el contenido <strong>ya generado</strong>: tu amigo no gasta nada de su cuota en armarla. Cuanto más contenido tengas hecho, más le ahorrás.
+      </div>
+      <p class="hint" style="margin-top:12px">De esta materia ya tenés generado: <strong>${nodosListos} de ${totalNodos}</strong> nodos. Los que falten, tu amigo los va a generar con su propia clave a medida que avance.</p>
+      <div class="codigo-box" id="codigo">${esc(codigo)}</div>
+      <p class="hint">${(codigo.length/1000).toFixed(1)}k caracteres</p>
+      <button class="btn" id="copiar">📋 Copiar código</button>
+      <button class="btn sec" id="descargar">💾 Descargar como archivo</button>
+    </div>`;
+  wireMarca();
+  document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:m.id};render();};
+  document.getElementById('copiar').onclick=async ()=>{
+    const btn=document.getElementById('copiar');
+    try{
+      await navigator.clipboard.writeText(codigo);
+      btn.textContent='✓ ¡Copiado!';
+      setTimeout(()=>{btn.textContent='📋 Copiar código';},2000);
+    }catch(e){
+      // fallback: seleccionar el texto
+      const r=document.createRange();
+      r.selectNode(document.getElementById('codigo'));
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(r);
+      btn.textContent='Copialo a mano (está seleccionado)';
+    }
+  };
+  document.getElementById('descargar').onclick=()=>{
+    const blob=new Blob([codigo],{type:'text/plain'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`estudiotrack-${m.nombre.replace(/[^a-z0-9]/gi,'-').toLowerCase()}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+}
+
+/* ---------- importar materia ---------- */
+function renderImportar(err){
+  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver">← Volver</button>
+    <div class="card">
+      <h2>Importar materia</h2>
+      <p class="sub">¿Un compañero te pasó un código? Pegalo acá y tenés la materia lista, sin subir apuntes ni gastar tu cuota.</p>
+      <label for="codigo-in">Código de la materia</label>
+      <textarea id="codigo-in" style="min-height:120px;font-family:ui-monospace,monospace;font-size:12px" placeholder="R1_..."></textarea>
+      <p class="hint">También podés arrastrar el archivo .txt que te pasaron.</p>
+      <div id="err-imp">${err?`<div class="err">${esc(err)}</div>`:''}</div>
+      <button class="btn" id="importar">Importar</button>
+      <button class="btn sec" id="archivo-btn">📂 Cargar archivo</button>
+      <input type="file" id="archivo-in" accept=".txt" style="display:none">
+    </div>`;
+  wireMarca();
+  document.getElementById('volver').onclick=()=>{vista={tipo:'inicio'};render();};
+  const inp=document.getElementById('archivo-in');
+  document.getElementById('archivo-btn').onclick=()=>inp.click();
+  inp.onchange=()=>{
+    const f=inp.files[0];
+    if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ document.getElementById('codigo-in').value=r.result.trim(); };
+    r.readAsText(f);
+  };
+  document.getElementById('importar').onclick=async ()=>{
+    const btn=document.getElementById('importar');
+    const cod=document.getElementById('codigo-in').value.trim();
+    if(!cod){ renderImportar('Pegá el código primero.'); return; }
+    btn.disabled=true; btn.textContent='Importando…';
+    try{
+      const m=await importarMateria(cod);
+      vista={tipo:'camino',id:m.id};
+      render();
+    }catch(e){
+      renderImportar('No pude leer ese código: '+(e.message||'formato inválido'));
     }
   };
 }
@@ -1154,8 +1357,9 @@ function accionesHTML(){
   return `
     <div class="acciones-pie">
       <button class="btn sec chico ${repasoLibre?'repaso-on':''}" id="repaso">${repasoLibre?'✓ Repaso':'🔁 Modo repaso'}</button>
-      <button class="btn sec chico" id="reiniciar">↺ Reiniciar camino</button>
-      <button class="btn sec chico" id="borrar">🗑 Borrar materia</button>
+      <button class="btn sec chico" id="compartir">📤 Compartir</button>
+      <button class="btn sec chico" id="reiniciar">↺ Reiniciar</button>
+      <button class="btn sec chico" id="borrar">🗑 Borrar</button>
     </div>`;
 }
 
@@ -1174,6 +1378,8 @@ function wireCamino(m,d){
   if(bs) bs.onclick=()=>{repasoLibre=false;render();};
   const br=document.getElementById('repaso');
   if(br) br.onclick=()=>{repasoLibre=!repasoLibre;render();};
+  const bc=document.getElementById('compartir');
+  if(bc) bc.onclick=()=>{ vista={tipo:'compartir', id:m.id}; render(); };
   const bre=document.getElementById('reiniciar');
   if(bre) bre.onclick=()=>{
     if(confirm(`Esto vuelve "${m.nombre}" a 0% para hacerla de nuevo. Se conservan tus apuntes y el plan; los quizzes van a generar preguntas nuevas. ¿Seguimos?`)){
