@@ -493,7 +493,7 @@ function sanitizarTexto(txt){
     .replace(/[ \t]{3,}/g,'  ')
     .replace(/\n{4,}/g,'\n\n\n');
 }
-function recortar(txt, max=15000){
+function recortar(txt, max=120000){
   txt = sanitizarTexto(txt);
   return txt.length>max ? txt.slice(0,max)+'\n[apuntes recortados]' : txt;
 }
@@ -507,11 +507,11 @@ Apuntes del estudiante:
 ${recortar(apuntes)}
 ---
 
-IMPORTANTE: dividí el material en MÍNIMO 4 y máximo 6 unidades temáticas distintas (NO lo resumas en una sola unidad). Recorré TODOS los temas de los apuntes y agrupalos en unidades en orden lógico de estudio. Cada unidad temática DEBE tener exactamente 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
+IMPORTANTÍSIMO — COBERTURA COMPLETA: el plan tiene que cubrir el material de PRINCIPIO A FIN. Antes de armarlo, recorré TODO el texto de los apuntes, desde el primer tema hasta el último, y hacé una lista mental de todos los temas que aparecen. NO te quedes solo con los primeros temas: los que están al final del material son tan importantes como los del principio. Si el material es largo, agrupá temas afines, pero que NINGÚN tema quede afuera.
 
-Entonces el resultado tiene: 4 a 6 unidades temáticas (cada una con lección + quiz) MÁS la unidad "Recta final". En total, mínimo 5 unidades.
+Dividí ese material en 4 a 8 unidades temáticas, en orden lógico de estudio, de modo que entre todas cubran el 100% del contenido. Cada unidad temática DEBE tener exactamente 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
 
-Respondé SOLO con este JSON (sin texto antes ni después), siguiendo EXACTAMENTE esta estructura con varias unidades:
+Respondé SOLO con este JSON (sin texto antes ni después). Agregá tantas unidades como haga falta para cubrir todo el material (entre 4 y 8, más la Recta final):
 {"unidades":[
 {"titulo":"Nombre del tema 1","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Nombre del tema 2","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
@@ -560,7 +560,7 @@ Respondé SOLO con este JSON:
 function pQuiz(m, apuntes, nodo, esSimulacro, evitar){
   const n = esSimulacro ? 10 : 5;
   const alcance = esSimulacro
-    ? 'TODOS los temas de los apuntes. Recorré el material entero y repartí las preguntas entre los distintos temas, sin concentrarte en uno solo. Dificultad de examen final.'
+    ? 'TODO el material, de principio a fin. Recorré los apuntes ENTEROS y repartí las preguntas de forma pareja entre los distintos temas: algunas del principio, otras del medio y otras del final. NO te concentres solo en los primeros temas. Dificultad de examen final.'
     : `"${nodo.titulo}" (temas: ${nodo.temas})`;
   const ex=exigencia(m.objetivo);
   return `Sos un profesor universitario argentino armando un ${esSimulacro?'EXAMEN FINAL':'quiz'} de "${m.nombre}".
@@ -689,6 +689,7 @@ function pintarArchivos(){
       ${a.estado==='ok'?'<span class="ok-a">✓</span>':a.estado==='error'?'<span class="err-a">✗</span>':'<span>⏳</span>'}
       <span>${esc(a.nombre)}</span>
       ${a.estado==='leyendo'?'<span class="estado-a">leyendo…</span>':''}
+      ${a.estado==='ok'?`<span class="estado-a">${(a.texto.length/1000).toFixed(1)}k caracteres</span>`:''}
       ${a.estado==='error'?`<span class="estado-a">${esc(a.msg)}</span>`:''}
       ${a.estado!=='leyendo'?`<button class="quitar" data-i="${i}" aria-label="Quitar">✕</button>`:''}
     </div>`).join('');
@@ -1071,7 +1072,7 @@ function renderNueva(err){
       const m={id:'m'+Date.now(),nombre,fecha,objetivo};
       let plan=null;
       for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
-        const p=await iaJSON(pPlan(m,apuntes),4096,true);
+        const p=await iaJSON(pPlan(m,apuntes),6144,true);
         const unidades=(p&&p.unidades)||[];
         const conNodos=unidades.filter(u=>u.nodos&&u.nodos.length);
         if(unidades.length>=3 && conNodos.length>=3){ plan=p; break; }
@@ -1079,7 +1080,7 @@ function renderNueva(err){
       if(!plan) throw new Error('La IA armó un plan demasiado corto. Reintentá, o subí apuntes con un poco más de contenido.');
       materias.push(m);
       J.set('et:materias',materias);
-      guardarMateria(m.id,{apuntes:recortar(apuntes,60000),plan,completados:{},contenido:{},usadas:{}});
+      guardarMateria(m.id,{apuntes:recortar(apuntes,200000),plan,completados:{},contenido:{},usadas:{}});
       archivosSubidos=[];
       vista={tipo:'camino',id:m.id};render();
     }catch(e){
