@@ -177,6 +177,10 @@
   .banner-repaso strong{font-weight:700}
   .banner-repaso button{margin-left:auto;background:var(--tinta);color:var(--papel);border:none;border-radius:8px;padding:6px 12px;font-family:inherit;font-weight:600;font-size:13px;cursor:pointer;flex-shrink:0}
   .btn.repaso-on{background:#3A5BA0;box-shadow:0 3px 0 #2A447D}
+  .aviso-clave{display:flex;align-items:center;gap:12px;width:100%;text-align:left;font-family:inherit;background:#FFF9E3;border:1.5px solid #E8C22E;border-radius:14px;padding:14px 16px;margin-top:14px;cursor:pointer;color:var(--tinta);box-shadow:var(--sombra)}
+  .aviso-clave .ac-ico{font-size:22px}
+  .aviso-clave .ac-tx{flex:1;font-size:13.5px;line-height:1.4}
+  .aviso-clave .ac-fl{font-size:18px;opacity:.6}
   .instalar-banner{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:50;display:flex;align-items:center;gap:12px;background:var(--tinta);color:var(--papel);border-radius:14px;padding:12px 16px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:480px;width:calc(100% - 32px);font-size:14px}
   .instalar-banner .ib-ico{font-size:22px}
   .instalar-banner .ib-tx{flex:1;line-height:1.3}
@@ -234,13 +238,15 @@ function borrarMateria(id){
   materias = materias.filter(m=>m.id!==id);
   J.set('et:materias', materias);
 }
-function hayMotor(){ return !!BACKEND_URL || !!clavePropia; }
+function hayMotor(){ return !!clavePropia || !!BACKEND_URL; }
+function tieneClavePropia(){ return !!clavePropia; }
 
 /* =========================================================
    MOTOR DE IA
    Orden: 1) worker compartido  2) clave propia (plan B)
    ========================================================= */
-const MODELOS = ['gemini-2.5-flash','gemini-flash-latest','gemini-2.0-flash'];
+// Flash-Lite tiene la cuota gratuita más alta; se prueba primero.
+const MODELOS = ['gemini-2.5-flash-lite','gemini-flash-lite-latest','gemini-2.5-flash','gemini-flash-latest'];
 let modeloActivo = st.get('et:modelo') || MODELOS[0];
 
 async function llamadaCruda(via, modelo, partes, generationConfig){
@@ -263,7 +269,12 @@ async function llamadaCruda(via, modelo, partes, generationConfig){
   const data = await res.json().catch(()=>({error:{message:'Respuesta ilegible (HTTP '+res.status+')'}}));
   if(data.error){
     const msg = data.error.message||'Error de la API';
-    if(res.status===429) throw new Error('LIMITE');
+    if(res.status===429){
+      // distinguir cuota diaria agotada de freno por minuto
+      throw new Error(/per day|daily|PerDay|RPD/i.test(msg) ? 'LIMITE_DIA' : 'LIMITE');
+    }
+    if(res.status===503 || /overloaded|high demand|UNAVAILABLE/i.test(msg)) throw new Error('SATURADO');
+    if(res.status===403 || /permission/i.test(msg)) throw new Error('SIN_PERMISO');
     if(res.status===400 && /API key/i.test(msg)) throw new Error('CLAVE_INVALIDA');
     if(res.status===404) throw new Error('MODELO_404');
     throw new Error(msg);
@@ -293,8 +304,8 @@ async function llamadaConModelos(via, contents, generationConfig){
 // capa principal: backend primero, clave propia como plan B, reintento en 429
 async function gemini(contents, generationConfig){
   const vias=[];
-  if(BACKEND_URL) vias.push('backend');
-  if(clavePropia) vias.push('propia');
+  if(clavePropia) vias.push('propia');      // la clave del usuario va primero (su cuota es solo suya)
+  if(BACKEND_URL) vias.push('backend');     // el motor compartido queda como respaldo
   if(!vias.length) throw new Error('SIN_MOTOR');
 
   let ultimoErr;
@@ -353,10 +364,14 @@ async function iaJSON(prompt, maxTokens, sinJsonMime){
 }
 
 function mensajeError(e){
-  if(e.message==='LIMITE') return 'El motor de IA llegó a su límite por minuto (es compartido entre los que usan la app). Esperá un minuto y reintentá. Si pasa seguido, podés cargar tu propia clave gratis en Ajustes (⚙️).';
-  if(e.message==='CLAVE_INVALIDA') return 'La clave configurada no es válida. Revisala en Ajustes (⚙️).';
-  if(e.message==='SIN_MOTOR') return 'La app no tiene motor de IA configurado. Entrá a Ajustes (⚙️).';
-  return e.message||'Error desconocido';
+  const m=e.message||'';
+  if(m==='LIMITE_DIA') return 'Se te acabó la cuota gratuita de Gemini por hoy. Se renueva a la madrugada (medianoche hora del Pacífico). Mañana podés seguir.';
+  if(m==='LIMITE') return 'Muchos pedidos seguidos: Gemini te frenó por un minuto. Esperá un toque y reintentá.';
+  if(m==='SATURADO') return 'Los servidores de Google están saturados en este momento. No es tu clave: probá de nuevo en un rato.';
+  if(m==='CLAVE_INVALIDA') return 'Esa clave no es válida. Fijate de copiarla completa desde aistudio.google.com/apikey (empieza con "AIza" o "AQ.").';
+  if(m==='SIN_PERMISO') return 'Tu clave no tiene permiso para usar Gemini. Suele pasar con claves recién creadas: esperá unos minutos, o creá una nueva en aistudio.google.com/apikey.';
+  if(m==='SIN_MOTOR') return 'Todavía no cargaste tu clave gratuita de Gemini. Entrá a Ajustes (⚙️) y seguí los 2 pasos.';
+  return m||'Error desconocido';
 }
 
 /* ---------- sanitización ---------- */
@@ -406,16 +421,39 @@ Armá una lección sobre: "${nodo.titulo}" (temas: ${nodo.temas}). Basate SOLO e
 Respondé SOLO con este JSON:
 {"resumen":"2-3 oraciones con la idea central","puntos":["5 a 7 puntos clave, 1-2 oraciones cada uno, concretos y estudiables"],"ejemplo":"un caso típico de examen resuelto o explicado, 2-4 oraciones"}`;
 }
-function pQuiz(m, apuntes, nodo, esSimulacro, evitar){
-  const n = esSimulacro ? 8 : 5;
-  const alcance = esSimulacro ? 'TODOS los temas de los apuntes, mezclados, con dificultad de examen final' : `"${nodo.titulo}" (temas: ${nodo.temas})`;
-  return `Sos un profesor universitario argentino armando un ${esSimulacro?'simulacro de examen':'quiz'} de "${m.nombre}".
+// genera lección + quiz de una unidad completa en UN solo pedido (ahorra cuota)
+function pUnidad(m, apuntes, unidad){
+  const lec=unidad.nodos.find(n=>n.tipo==='leccion')||{titulo:unidad.titulo,temas:unidad.titulo};
+  const qz=unidad.nodos.find(n=>n.tipo==='quiz')||{titulo:unidad.titulo,temas:unidad.titulo};
+  return `Sos un tutor universitario argentino (voseo, tono directo). Materia: "${m.nombre}".
 Apuntes del estudiante:
 ---
 ${recortar(apuntes)}
 ---
-Armá ${n} preguntas de opción múltiple sobre ${alcance}. Basate en los apuntes. 4 opciones plausibles y cortas, UNA sola correcta, en posición variada. Explicación breve de por qué.
-${evitar?`NO repitas estas preguntas ya usadas: ${evitar.slice(0,900)}`:''}
+Unidad a preparar: "${unidad.titulo}".
+
+Generá DOS cosas en un solo JSON:
+1) Una lección sobre "${lec.titulo}" (temas: ${lec.temas||unidad.titulo}).
+2) Un quiz de 5 preguntas de opción múltiple sobre "${qz.titulo}" (temas: ${qz.temas||unidad.titulo}).
+
+Basate SOLO en los apuntes; si falta algo esencial, completá con conocimiento estándar de la materia. Las preguntas: 4 opciones plausibles y cortas, UNA sola correcta, en posición variada.
+
+Respondé SOLO con este JSON:
+{"leccion":{"resumen":"2-3 oraciones con la idea central","puntos":["5 a 7 puntos clave, 1-2 oraciones cada uno"],"ejemplo":"un caso típico de examen, 2-4 oraciones"},"quiz":{"preguntas":[{"q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}]}}`;
+}
+
+function pQuiz(m, apuntes, nodo, esSimulacro, evitar){
+  const n = esSimulacro ? 10 : 5;
+  const alcance = esSimulacro
+    ? 'TODOS los temas de los apuntes. Recorré el material entero y repartí las preguntas entre los distintos temas, sin concentrarte en uno solo. Dificultad de examen final.'
+    : `"${nodo.titulo}" (temas: ${nodo.temas})`;
+  return `Sos un profesor universitario argentino armando un ${esSimulacro?'EXAMEN FINAL':'quiz'} de "${m.nombre}".
+Apuntes del estudiante:
+---
+${recortar(apuntes)}
+---
+Armá ${n} preguntas de opción múltiple sobre ${alcance} Basate en los apuntes. 4 opciones plausibles y cortas, UNA sola correcta, en posición variada. Explicación breve.
+${evitar?`\nMUY IMPORTANTE: estas preguntas YA se usaron antes. Generá preguntas COMPLETAMENTE DISTINTAS, sobre otros aspectos del material, sin repetir ni reformular estas:\n${evitar.slice(0,1800)}`:''}
 Respondé SOLO con este JSON:
 {"preguntas":[{"q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}]}`;
 }
@@ -698,9 +736,15 @@ function renderInicio(){
       <p class="sub">Tocá una para seguir el camino donde lo dejaste.</p>
       ${lista}
       <button class="btn" id="nueva">+ Nueva materia</button>
-      ${!hayMotor()?`<p class="hint" style="margin-top:10px">⚙️ La app no tiene motor de IA configurado todavía. Entrá a Ajustes.</p>`:''}
-    </div>`;
+    </div>
+    ${!tieneClavePropia()?`<button class="aviso-clave" id="ir-clave">
+        <span class="ac-ico">🔑</span>
+        <span class="ac-tx"><strong>Activá tu IA gratis (2 min)</strong><br>Cargá tu clave de Google Gemini para tener tu propia cuota diaria.</span>
+        <span class="ac-fl">→</span>
+      </button>`:''}`;
   wireMarca();
+  const ic=document.getElementById('ir-clave');
+  if(ic) ic.onclick=()=>{ vista={tipo:'ajustes',volver:{tipo:'inicio'}}; render(); };
   const sh=document.getElementById('seguir-hoy');
   if(sh) sh.onclick=()=>{ vista={tipo:'camino',id:prox.materia.id}; render(); };
   const cm=document.getElementById('cfg-meta');
@@ -722,25 +766,27 @@ function renderInicio(){
 function renderAjustes(err){
   const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
   const volver=vista.volver||{tipo:'inicio'};
-  const estadoBackend = BACKEND_URL
-    ? `<div class="estado-motor"><span class="punto-v"></span>Motor compartido activo — no tenés que configurar nada. Si alguna vez se satura, podés usar tu propia clave como plan B acá abajo.</div>`
-    : `<div class="estado-motor"><span class="punto-a"></span>Motor compartido no configurado en esta copia de la app. Hace falta una clave propia (gratis) para usarla.</div>`;
+  const tiene=tieneClavePropia();
+  const estado = tiene
+    ? `<div class="estado-motor"><span class="punto-v"></span><span><strong>Tu clave está activa.</strong> Tenés tu propia cuota gratuita de Gemini, sin compartirla con nadie.</span></div>`
+    : `<div class="estado-motor"><span class="punto-a"></span><span><strong>Todavía no cargaste tu clave.</strong> Es gratis, tarda 2 minutos y te da tu propia cuota diaria. Seguí los pasos de abajo.</span></div>`;
   $app.innerHTML=`
     ${marcaHTML()}
     <div class="card">
-      <h2>Ajustes</h2>
-      <p class="sub">Motor de IA de EstudioTrack.</p>
-      ${estadoBackend}
-      <label style="margin-top:20px">Clave propia de Gemini (${BACKEND_URL?'opcional, plan B':'necesaria'})</label>
-      <input id="clave" type="password" placeholder="AIza…" value="${esc(clavePropia)}">
-      <div class="pasos" style="margin-top:12px">
-        <div class="paso"><span class="n">1</span><span>Entrá a <strong>aistudio.google.com/apikey</strong> con tu cuenta de Google (gratis, sin tarjeta).</span></div>
-        <div class="paso"><span class="n">2</span><span>Tocá <strong>"Create API key"</strong>, copiá la clave y pegala arriba.</span></div>
+      <h2>Tu clave de IA (gratis)</h2>
+      <p class="sub">EstudioTrack usa Google Gemini. Cada uno usa su propia clave gratuita: así nadie se queda sin cuota.</p>
+      ${estado}
+      <div class="pasos" style="margin-top:18px">
+        <div class="paso"><span class="n">1</span><span>Entrá a <strong>aistudio.google.com/apikey</strong> e iniciá sesión con tu cuenta de Google (es gratis, <strong>no pide tarjeta</strong>).</span></div>
+        <div class="paso"><span class="n">2</span><span>Tocá <strong>"Crear clave de API"</strong> y después <strong>"Copiar clave"</strong>.</span></div>
+        <div class="paso"><span class="n">3</span><span>Pegala acá abajo y tocá Guardar. Listo, ya podés estudiar.</span></div>
       </div>
-      <p class="hint">La clave se guarda solo en este dispositivo. En el nivel gratuito, Google puede usar lo que envíes para mejorar sus modelos.</p>
+      <label for="clave">Pegá tu clave acá</label>
+      <input id="clave" type="password" placeholder="AIza… o AQ.…" value="${esc(clavePropia)}">
+      <p class="hint">Se guarda solo en este dispositivo, nadie más la ve. En el plan gratuito, Google puede usar lo que envíes para mejorar sus modelos: no subas nada privado.</p>
       <div id="err-clave">${err?`<div class="err">${esc(err)}</div>`:''}</div>
-      <button class="btn" id="guardar">Guardar${''}</button>
-      ${clavePropia?'<button class="btn sec" id="quitar-clave">Quitar clave propia</button>':''}
+      <button class="btn" id="guardar">Guardar y probar</button>
+      ${tiene?'<button class="btn sec" id="quitar-clave">Quitar mi clave</button>':''}
       <button class="btn sec" id="cancelar">Volver</button>
     </div>`;
   wireMarca();
@@ -751,20 +797,19 @@ function renderAjustes(err){
     const btn=document.getElementById('guardar');
     const k=document.getElementById('clave').value.trim();
     if(!k){
-      if(BACKEND_URL){vista=volver;render();return;}
-      document.getElementById('err-clave').innerHTML='<div class="err">Sin motor compartido, la clave es necesaria.</div>';
+      document.getElementById('err-clave').innerHTML='<div class="err">Pegá tu clave primero. Seguí los 3 pasos de arriba.</div>';
       return;
     }
     const anterior=clavePropia;
     clavePropia=k;
     btn.disabled=true;btn.textContent='Probando…';
     try{
-      await llamadaConModelos('propia',[{text:'Respondé solo con este JSON: {"ok":true}'}],{maxOutputTokens:50,responseMimeType:'application/json'});
+      await llamadaConModelos('propia',[{text:'Respondé solo con este JSON: {"ok":true}'}],{maxOutputTokens:50});
       st.set('et:key',k);
       vista=volver;render();
     }catch(e){
       clavePropia=anterior;
-      btn.disabled=false;btn.textContent='Guardar';
+      btn.disabled=false;btn.textContent='Guardar y probar';
       document.getElementById('err-clave').innerHTML=`<div class="err">${esc(mensajeError(e))}</div>`;
     }
   };
@@ -939,7 +984,9 @@ function wireCamino(m,d){
   if(bre) bre.onclick=()=>{
     if(confirm(`Esto vuelve "${m.nombre}" a 0% para hacerla de nuevo. Se conservan tus apuntes y el plan; los quizzes van a generar preguntas nuevas. ¿Seguimos?`)){
       const d2=datosMateria(m.id);
-      d2.completados={}; d2.contenido={}; d2.usadas={};
+      d2.completados={}; d2.contenido={};
+      // OJO: 'usadas' NO se borra, así el examen final y los quizzes
+      // generan preguntas nuevas y no repiten las de la vuelta anterior.
       guardarMateria(m.id,d2);
       repasoLibre=false;
       vista={tipo:'camino',id:m.id};
@@ -1010,36 +1057,58 @@ async function abrirNodo(mid, nid, forzarNuevo){
   const nodo=planos.find(n=>n.id===nid);
   if(!nodo) return;
 
+  const ui=parseInt(nid.split('-')[0],10);
+  const unidad=d.plan.unidades[ui];
+  const esSimulacro=nodo.tipo==='simulacro';
+
   if(!d.contenido[nid]||forzarNuevo){
-    vista={tipo:'generando',msg:nodo.tipo==='leccion'?'Preparando la lección…':nodo.tipo==='simulacro'?'Armando el simulacro…':'Armando el quiz…'};
+    vista={tipo:'generando',msg:esSimulacro?'Armando el examen final…':(forzarNuevo?'Generando preguntas nuevas…':'Preparando la unidad…')};
     render();
     try{
-      let cont;
-      if(nodo.tipo==='leccion'){
-        cont=await iaJSON(pLeccion(m,d.apuntes,nodo),2560);
-        if(!cont.resumen||!cont.puntos) throw new Error('La lección vino incompleta');
-      }else{
-        const evitar=forzarNuevo?(d.usadas[nid]||''):'';
-        cont=await iaJSON(pQuiz(m,d.apuntes,nodo,nodo.tipo==='simulacro',evitar),4096);
+      if(esSimulacro){
+        // el examen final se genera solo (cubre todos los temas)
+        const evitar=d.usadas[nid]||'';
+        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,true,evitar),4096);
+        if(!cont.preguntas||!cont.preguntas.length) throw new Error('El examen vino vacío');
+        d.usadas[nid]=[(d.usadas[nid]||''),cont.preguntas.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
+        d.contenido[nid]=cont;
+      }else if(forzarNuevo && nodo.tipo==='quiz'){
+        // reintento de quiz: solo el quiz, con preguntas nuevas
+        const evitar=d.usadas[nid]||'';
+        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,false,evitar),3072);
         if(!cont.preguntas||!cont.preguntas.length) throw new Error('El quiz vino vacío');
-        d.usadas[nid]=cont.preguntas.map(p=>p.q).join(' | ');
+        d.usadas[nid]=[(d.usadas[nid]||''),cont.preguntas.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
+        d.contenido[nid]=cont;
+      }else{
+        // UN SOLO PEDIDO genera la lección Y el quiz de toda la unidad (ahorra cuota)
+        const cont=await iaJSON(pUnidad(m,d.apuntes,unidad),4096);
+        if(!cont.leccion||!cont.quiz) throw new Error('La unidad vino incompleta');
+        unidad.nodos.forEach((n,ni)=>{
+          const id=`${ui}-${ni}`;
+          if(n.tipo==='leccion') d.contenido[id]=cont.leccion;
+          else if(n.tipo==='quiz'){
+            d.contenido[id]=cont.quiz;
+            d.usadas[id]=(cont.quiz.preguntas||[]).map(p=>p.q).join(' | ');
+          }
+        });
       }
-      d.contenido[nid]=cont;
       guardarMateria(mid,d);
     }catch(e){
       // si falló regenerar pero hay contenido viejo, usarlo barajado
-      if(forzarNuevo&&d.contenido[nid]){
+      if(forzarNuevo&&d.contenido[nid]&&d.contenido[nid].preguntas){
         vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(d.contenido[nid].preguntas),i:0,aciertos:0,respondida:false};
         render();
         return;
       }
       vista={tipo:'camino',id:mid};render();
-      alert('No pude generar este contenido: '+mensajeError(e));
+      alert(mensajeError(e));
       return;
     }
   }
-  if(nodo.tipo==='leccion') vista={tipo:'leccion',mid,nid,nodo,contenido:d.contenido[nid]};
-  else vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(d.contenido[nid].preguntas),i:0,aciertos:0,respondida:false};
+  const c=d.contenido[nid];
+  if(!c){ vista={tipo:'camino',id:mid}; render(); alert('No se generó el contenido de este nodo. Probá de nuevo.'); return; }
+  if(nodo.tipo==='leccion') vista={tipo:'leccion',mid,nid,nodo,contenido:c};
+  else vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(c.preguntas||[]),i:0,aciertos:0,respondida:false};
   render();
 }
 
