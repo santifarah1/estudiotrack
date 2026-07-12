@@ -497,10 +497,10 @@ function tieneClavePropia(){ return !!clavePropia; }
    ========================================================= */
 // Flash-Lite tiene la cuota gratuita más alta; se prueba primero.
 const MODELOS = [
-  'gemini-flash-lite-latest',   // alias: siempre apunta al Flash-Lite vigente
-  'gemini-2.5-flash-lite',
-  'gemini-flash-latest',        // alias: Flash vigente (3.5 en cuentas nuevas)
-  'gemini-2.5-flash'
+  'gemini-flash-lite-latest',   // alias vigente: el que funciona en cuentas nuevas
+  'gemini-2.5-flash-lite',      // respaldo para proyectos viejos
+  'gemini-2.5-flash',
+  'gemini-flash-latest'
 ];
 let modeloActivo = st.get('et:modelo') || MODELOS[0];
 // si el modelo guardado ya no está en la lista, volver al primero
@@ -527,16 +527,19 @@ async function llamadaCruda(via, modelo, partes, generationConfig){
   if(data.error){
     const msg = data.error.message||'Error de la API';
     if(res.status===429){
-      // Google manda los detalles de qué cuota se excedió en error.details
       const detalles=JSON.stringify(data.error.details||[]);
       const esDiario = /per day|PerDay|RPD|GenerateRequestsPerDay/i.test(msg+detalles);
-      throw new Error(esDiario ? 'LIMITE_DIA' : 'LIMITE');
+      const err=new Error(esDiario ? 'LIMITE_DIA' : 'LIMITE');
+      err.crudo = msg + ' || ' + detalles;   // mensaje textual de Google, para el diagnóstico
+      err.http = res.status;
+      throw err;
     }
-    if(res.status===503 || /overloaded|high demand|UNAVAILABLE/i.test(msg)) throw new Error('SATURADO');
-    if(res.status===403 || /permission/i.test(msg)) throw new Error('SIN_PERMISO');
-    if(res.status===400 && /API key/i.test(msg)) throw new Error('CLAVE_INVALIDA');
-    if(res.status===404) throw new Error('MODELO_404');
-    throw new Error(msg);
+    const mkErr=(code)=>{ const e=new Error(code); e.crudo=msg; e.http=res.status; return e; };
+    if(res.status===503 || /overloaded|high demand|UNAVAILABLE/i.test(msg)) throw mkErr('SATURADO');
+    if(res.status===403 || /permission/i.test(msg)) throw mkErr('SIN_PERMISO');
+    if(res.status===400 && /API key/i.test(msg)) throw mkErr('CLAVE_INVALIDA');
+    if(res.status===404) throw mkErr('MODELO_404');
+    throw mkErr(msg);
   }
   const texto = (data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
   if(!texto) throw new Error('Respuesta vacía de la IA');
@@ -1191,7 +1194,8 @@ function renderAjustes(err){
         await llamadaCruda('propia', modelo, [{text:'Decí solo: ok'}], {maxOutputTokens:20});
         lineas.push(`<div style="color:var(--aprobado);font-weight:600">✓ ${modelo} — funciona</div>`);
       }catch(e){
-        lineas.push(`<div style="color:var(--error)">✗ ${modelo} — ${esc(mensajeError(e))}</div>`);
+        const detalle = e.crudo ? e.crudo : (e.message||'');
+        lineas.push(`<div style="color:var(--error);margin-bottom:8px">✗ <strong>${modelo}</strong> (HTTP ${e.http||'?'})<br><span style="font-size:11.5px;font-family:ui-monospace,monospace;word-break:break-all">${esc(String(detalle).slice(0,500))}</span></div>`);
       }
     }
     out.innerHTML=`<div class="codigo-box" style="font-family:inherit;font-size:13px;max-height:none">${lineas.join('')}</div>`;
@@ -1208,17 +1212,18 @@ function renderAjustes(err){
       document.getElementById('err-clave').innerHTML='<div class="err">Pegá tu clave primero. Seguí los 3 pasos de arriba.</div>';
       return;
     }
-    const anterior=clavePropia;
     clavePropia=k;
+    st.set('et:key',k);              // guardar SIEMPRE: si la prueba falla, igual queda cargada
     btn.disabled=true;btn.textContent='Probando…';
     try{
       await llamadaConModelos('propia',[{text:'Respondé solo con este JSON: {"ok":true}'}],{maxOutputTokens:50});
-      st.set('et:key',k);
       vista=volver;render();
     }catch(e){
-      clavePropia=anterior;
       btn.disabled=false;btn.textContent='Guardar y probar';
-      document.getElementById('err-clave').innerHTML=`<div class="err">${esc(mensajeError(e))}</div>`;
+      document.getElementById('err-clave').innerHTML=`<div class="err"><strong>Tu clave quedó guardada</strong>, pero la prueba falló: ${esc(mensajeError(e))}<br><br>Podés tocar "🔍 Probar qué modelos funcionan" para ver el detalle.</div>`;
+      // re-render para que aparezca el botón de diagnóstico
+      const dgBtn=document.getElementById('diagnostico');
+      if(!dgBtn) renderAjustes(null);
     }
   };
 }
