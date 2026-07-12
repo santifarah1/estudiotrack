@@ -26,8 +26,17 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Inter',system-ui,sans-serif;background:var(--papel);color:var(--tinta);min-height:100vh;line-height:1.5}
   .wrap{max-width:520px;margin:0 auto;padding:20px 16px 80px}
-  /* --- layout de escritorio: dos columnas cuando hay panel lateral --- */
+  /* --- layout de escritorio --- */
   @media (min-width:900px){
+    /* vista del camino sola: dos columnas (info a la izquierda, nodos a la derecha) */
+    .wrap.camino-solo{max-width:940px}
+    .camino-solo .camino-grid{display:grid;grid-template-columns:300px 1fr;gap:32px;align-items:start}
+    .camino-solo .camino-info{position:sticky;top:20px}
+    .camino-solo .camino-info .materia-head{margin-top:0}
+    .camino-solo .camino-info .acciones-pie{margin-top:20px;flex-direction:column}
+    .camino-solo .camino-info .acciones-pie .btn{width:100%}
+    .camino-solo .camino-lista .camino{margin-top:0}
+    .camino-solo .camino-lista .unidad-titulo:first-child{margin-top:0}
     .wrap.split{max-width:1040px}
     .split .split-grid{display:grid;grid-template-columns:340px 1fr;gap:24px;align-items:start}
     .split .panel-camino{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow-y:auto;padding-right:4px}
@@ -633,12 +642,15 @@ NIVEL DE EXIGENCIA: el estudiante quiere sacarse ${m.objetivo}. ${ex.instruccion
 
 Generá DOS cosas en un solo JSON:
 1) Una lección sobre "${lec.titulo}" (temas: ${lec.temas||unidad.titulo}). ${ex.leccion}
-2) Un quiz de 5 preguntas de opción múltiple sobre "${qz.titulo}" (temas: ${qz.temas||unidad.titulo}).
+2) Un quiz de 5 preguntas de opción múltiple que evalúe esa MISMA lección.
+
+REGLA DE COHERENCIA: cada pregunta del quiz tiene que poder responderse con lo que explicaste en la lección (resumen, puntos clave o ejemplo). Si vas a preguntar por un dato, una excepción o un detalle, ASEGURATE de haberlo incluido antes en la lección. No preguntes cosas del material que la lección no menciona.
+Esto NO significa hacer preguntas fáciles: mantené el nivel de exigencia indicado arriba. Las preguntas pueden exigir razonar, aplicar y distinguir entre conceptos parecidos — pero siempre sobre contenido que la lección efectivamente cubrió.
 
 Basate SOLO en los apuntes; si falta algo esencial, completá con conocimiento estándar de la materia. Las preguntas: 4 opciones plausibles y cortas, UNA sola correcta, en posición variada.
 
 Respondé SOLO con este JSON:
-{"leccion":{"resumen":"2-3 oraciones con la idea central","puntos":["5 a 7 puntos clave, 1-2 oraciones cada uno"],"ejemplo":"un caso típico de examen, 2-4 oraciones"},"quiz":{"preguntas":[{"q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}]}}`;
+{"leccion":{"resumen":"2-3 oraciones con la idea central","puntos":["6 a 8 puntos clave, 1-2 oraciones cada uno. Incluí los datos concretos, excepciones, plazos, porcentajes y distinciones finas que después vas a preguntar en el quiz"],"ejemplo":"un caso típico de examen, 2-4 oraciones"},"quiz":{"preguntas":[{"q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}]}}`;
 }
 
 function pQuiz(m, apuntes, nodo, esSimulacro, evitar){
@@ -896,7 +908,7 @@ function wireMarca(){
 
 /* ---------- inicio ---------- */
 function renderInicio(){
-  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
   let lista='';
   if(!materias.length){
     lista=`<div class="vacio"><span class="emoji">🎓</span>Todavía no tenés materias.<br>Creá la primera y subí tus apuntes.</div>`;
@@ -1015,7 +1027,7 @@ function renderInicio(){
 
 /* ---------- ajustes ---------- */
 function renderAjustes(err){
-  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
   const volver=vista.volver||{tipo:'inicio'};
   const tiene=tieneClavePropia();
   const estado = tiene
@@ -1073,7 +1085,7 @@ function renderAjustes(err){
 
 /* ---------- compartir materia ---------- */
 async function renderCompartir(){
-  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
   const m=materias.find(x=>x.id===vista.id);
   if(!m){vista={tipo:'inicio'};render();return;}
   $app.innerHTML=`${marcaHTML()}
@@ -1139,7 +1151,7 @@ async function renderCompartir(){
 
 /* ---------- importar materia ---------- */
 function renderImportar(err){
-  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
   $app.innerHTML=`
     ${marcaHTML()}
     <button class="volver" id="volver">← Volver</button>
@@ -1182,7 +1194,7 @@ function renderImportar(err){
 
 /* ---------- logros ---------- */
 function renderLogros(){
-  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
   const ganados=CATALOGO_LOGROS.filter(l=>tieneLogro(l.id)).length;
   const total=CATALOGO_LOGROS.length;
   const cards=CATALOGO_LOGROS.map(l=>{
@@ -1210,7 +1222,7 @@ function renderLogros(){
 
 /* ---------- nueva materia ---------- */
 function renderNueva(err){
-  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
   const hoyMas7=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
   $app.innerHTML=`
     ${marcaHTML()}
@@ -1294,7 +1306,7 @@ function renderNueva(err){
 
 /* ---------- loading ---------- */
 function renderCargando(msg){
-  const _w=document.querySelector('.wrap'); if(_w)_w.classList.remove('split');
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
   $app.innerHTML=`${marcaHTML()}
     <div class="card cargando">
       <span class="lapiz">✏️</span>
@@ -1407,14 +1419,36 @@ function renderCamino(){
   const m=materias.find(x=>x.id===vista.id);
   const d=datosMateria(vista.id);
   if(!m||!d||!d.plan){vista={tipo:'inicio'};render();return;}
-  document.querySelector('.wrap').classList.remove('split');
-  $app.innerHTML=`
-    ${marcaHTML()}
-    <button class="volver" id="volver-inicio">← Mis materias</button>
-    ${cabeceraHTML(m,d)}
-    <div class="camino">${caminoHTML(m,d)}</div>
-    ${repasoLibre?`<div class="banner-repaso">🔁 <span><strong>Modo repaso activo.</strong> Practicá cualquier nodo libremente; tu progreso no se toca.</span><button id="salir-repaso">Salir</button></div>`:''}
-    ${accionesHTML()}`;
+  const wrap=document.querySelector('.wrap');
+  wrap.classList.remove('split');
+  const banner=repasoLibre?`<div class="banner-repaso">🔁 <span><strong>Modo repaso activo.</strong> Practicá cualquier nodo libremente; tu progreso no se toca.</span><button id="salir-repaso">Salir</button></div>`:'';
+
+  if(esDesktop()){
+    // en compu: info a la izquierda, camino a la derecha
+    wrap.classList.add('camino-solo');
+    $app.innerHTML=`
+      ${marcaHTML()}
+      <button class="volver" id="volver-inicio">← Mis materias</button>
+      <div class="camino-grid">
+        <div class="camino-info">
+          ${cabeceraHTML(m,d)}
+          ${banner}
+          ${accionesHTML()}
+        </div>
+        <div class="camino-lista">
+          <div class="camino">${caminoHTML(m,d)}</div>
+        </div>
+      </div>`;
+  }else{
+    wrap.classList.remove('camino-solo');
+    $app.innerHTML=`
+      ${marcaHTML()}
+      <button class="volver" id="volver-inicio">← Mis materias</button>
+      ${cabeceraHTML(m,d)}
+      <div class="camino">${caminoHTML(m,d)}</div>
+      ${banner}
+      ${accionesHTML()}`;
+  }
   wireMarca();
   wireCamino(m,d);
 }
@@ -1424,6 +1458,7 @@ function pintarContenido(contenidoHTML, wireContenido){
   const m=materias.find(x=>x.id===vista.mid);
   const d=datosMateria(vista.mid);
   const wrap=document.querySelector('.wrap');
+  wrap.classList.remove('camino-solo');
   if(esDesktop() && m && d && d.plan){
     wrap.classList.add('split');
     $app.innerHTML=`
@@ -1580,7 +1615,9 @@ function renderQuiz(){
       });
       document.getElementById('feedback').innerHTML=`
         <div class="explic ${bien?'bien':'mal'}">
-          <strong>${bien?'¡Bien ahí! ✓':'No era esa ✗'}</strong>${esc(q.explicacion||'')}
+          <strong>${bien?'¡Bien ahí! ✓':'No era esa ✗'}</strong>
+          ${bien?'':`<div style="margin-bottom:6px"><strong style="display:inline;font-weight:700">La correcta era:</strong> ${esc(q.opciones[q.correcta])}</div>`}
+          ${esc(q.explicacion||'')}
         </div>
         <button class="btn" id="sig">${vista.i+1<total?'Siguiente pregunta':'Ver resultado'}</button>`;
       document.getElementById('sig').onclick=()=>{vista.i++;vista.respondida=false;render();};
