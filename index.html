@@ -348,6 +348,54 @@ async function importarMateria(codigo){
   return m;
 }
 
+/* ---------- respaldo completo (todos los dispositivos) ---------- */
+async function exportarPerfil(incluirClave){
+  const datos={};
+  materias.forEach(m=>{ datos[m.id]=datosMateria(m.id); });
+  return await codificar({
+    v:1,
+    tipo:'perfil',
+    materias, datos,
+    racha, logros,
+    meta:metaDiaria,
+    clave: incluirClave ? clavePropia : ''
+  });
+}
+
+async function importarPerfil(codigo, modo){
+  const p=await decodificar(codigo);
+  if(!p||p.tipo!=='perfil') throw new Error('Ese código no es un respaldo de perfil (¿será el de una materia suelta?)');
+
+  if(modo==='reemplazar'){
+    // borrar lo que hay antes de restaurar
+    materias.forEach(m=>st.del('et:m:'+m.id));
+    materias=[];
+  }
+
+  // traer materias, evitando pisar ids existentes
+  const existentes=new Set(materias.map(m=>m.id));
+  (p.materias||[]).forEach(m=>{
+    let id=m.id;
+    if(existentes.has(id)) id='m'+Date.now()+Math.floor(Math.random()*1000);
+    const d=(p.datos||{})[m.id];
+    if(!d) return;
+    materias.push({...m, id});
+    guardarMateria(id, d);
+    existentes.add(id);
+  });
+  J.set('et:materias',materias);
+
+  // racha, logros y meta: quedarse con lo mejor de cada uno
+  if(p.racha && (p.racha.dias||0) > (racha.dias||0)){ racha=p.racha; J.set('et:racha',racha); }
+  if(p.logros){ logros={...logros, ...p.logros}; J.set('et:logros',logros); }
+  if(p.meta && modo==='reemplazar'){ metaDiaria=p.meta; J.set('et:meta',metaDiaria); }
+
+  // clave de API (solo si venía incluida y acá no hay ninguna)
+  if(p.clave && !clavePropia){ clavePropia=p.clave; st.set('et:key',clavePropia); }
+
+  return (p.materias||[]).length;
+}
+
 /* =========================================================
    LOGROS
    ========================================================= */
@@ -871,6 +919,20 @@ function exigencia(objetivo){
   };
 }
 
+// Descarta preguntas incompletas (opciones vacías, faltantes o índice inválido)
+function limpiarPreguntas(preguntas){
+  if(!Array.isArray(preguntas)) return [];
+  return preguntas.filter(p=>{
+    if(!p||typeof p.q!=='string'||!p.q.trim()) return false;
+    if(!Array.isArray(p.opciones)) return false;
+    const ops=p.opciones.filter(o=>typeof o==='string'&&o.trim());
+    if(ops.length<3) return false;                 // al menos 3 opciones válidas
+    if(ops.length!==p.opciones.length) return false; // alguna vino vacía -> descartar
+    if(typeof p.correcta!=='number'||p.correcta<0||p.correcta>=p.opciones.length) return false;
+    return true;
+  });
+}
+
 function barajar(preguntas){
   const mezcla=[...preguntas].sort(()=>Math.random()-.5);
   return mezcla.map(p=>{
@@ -885,6 +947,7 @@ function barajar(preguntas){
 function render(){
   const t=vista.tipo;
   if(t==='inicio')renderInicio();
+  else if(t==='respaldo')renderRespaldo();
   else if(t==='compartir')renderCompartir();
   else if(t==='importar')renderImportar();
   else if(t==='logros')renderLogros();
@@ -1055,10 +1118,14 @@ function renderAjustes(err){
       <div id="err-clave">${err?`<div class="err">${esc(err)}</div>`:''}</div>
       <button class="btn" id="guardar">Guardar y probar</button>
       ${tiene?'<button class="btn sec" id="quitar-clave">Quitar mi clave</button>':''}
+      <hr style="border:none;border-top:1.5px solid var(--borde);margin:22px 0">
+      <button class="btn sec" id="ir-respaldo">📦 Pasar mis datos a otro dispositivo</button>
       <button class="btn sec" id="cancelar">Volver</button>
     </div>`;
   wireMarca();
   document.getElementById('cancelar').onclick=()=>{vista=volver;render();};
+  const irb=document.getElementById('ir-respaldo');
+  if(irb) irb.onclick=()=>{vista={tipo:'respaldo'};render();};
   const q=document.getElementById('quitar-clave');
   if(q) q.onclick=()=>{clavePropia='';st.del('et:key');renderAjustes();};
   document.getElementById('guardar').onclick=async ()=>{
@@ -1081,6 +1148,98 @@ function renderAjustes(err){
       document.getElementById('err-clave').innerHTML=`<div class="err">${esc(mensajeError(e))}</div>`;
     }
   };
+}
+
+/* ---------- respaldo / sincronizar dispositivos ---------- */
+async function renderRespaldo(err, aviso){
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
+  const nMaterias=materias.length;
+  const nLogros=CATALOGO_LOGROS.filter(l=>tieneLogro(l.id)).length;
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver">← Volver</button>
+    <div class="card">
+      <h2>Pasar a otro dispositivo</h2>
+      <p class="sub">Llevá todo a tu celu o a la compu: materias, progreso, logros y tu clave.</p>
+      <div class="info-cuota">
+        <strong>📦 Qué se guarda</strong>
+        Tus ${nMaterias} materia${nMaterias===1?'':'s'} con el contenido y el progreso, ${nLogros} logro${nLogros===1?'':'s'}, tu racha 🔥 ${racha.dias} y la meta diaria. Podés incluir también tu clave de Gemini para no tener que cargarla de nuevo.
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-weight:600">
+        <input type="checkbox" id="con-clave" checked style="width:auto">
+        <span>Incluir mi clave de Gemini</span>
+      </label>
+      <p class="hint">Si vas a mandarte el código a vos mismo (mail, notas), dejalo tildado. Si se lo pasás a otra persona, destildalo: tu clave es tuya.</p>
+      <button class="btn" id="generar">📤 Generar respaldo</button>
+      <div id="salida"></div>
+      <hr style="border:none;border-top:1.5px solid var(--borde);margin:24px 0">
+      <h2 style="font-size:20px">Restaurar respaldo</h2>
+      <p class="sub">Pegá acá el código que generaste en el otro dispositivo.</p>
+      <textarea id="codigo-in" style="min-height:100px;font-family:ui-monospace,monospace;font-size:12px" placeholder="R1_..."></textarea>
+      <button class="btn sec" id="archivo-btn">📂 Cargar archivo</button>
+      <input type="file" id="archivo-in" accept=".txt" style="display:none">
+      ${aviso?`<div class="info-cuota" style="background:var(--aprobado-claro);border-color:var(--aprobado)">${esc(aviso)}</div>`:''}
+      <div id="err-resp">${err?`<div class="err">${esc(err)}</div>`:''}</div>
+      <button class="btn" id="restaurar">📥 Restaurar (sumar a lo que tengo)</button>
+      <button class="btn sec" id="restaurar-r">♻️ Restaurar reemplazando todo</button>
+    </div>`;
+  wireMarca();
+  document.getElementById('volver').onclick=()=>{vista={tipo:'ajustes',volver:{tipo:'inicio'}};render();};
+
+  document.getElementById('generar').onclick=async ()=>{
+    const btn=document.getElementById('generar');
+    btn.disabled=true; btn.textContent='Generando…';
+    const conClave=document.getElementById('con-clave').checked;
+    try{
+      const cod=await exportarPerfil(conClave);
+      document.getElementById('salida').innerHTML=`
+        <div class="codigo-box" id="codigo">${esc(cod)}</div>
+        <p class="hint">${(cod.length/1000).toFixed(1)}k caracteres</p>
+        <button class="btn" id="copiar">📋 Copiar</button>
+        <button class="btn sec" id="descargar">💾 Descargar archivo</button>`;
+      document.getElementById('copiar').onclick=async ()=>{
+        const b=document.getElementById('copiar');
+        try{ await navigator.clipboard.writeText(cod); b.textContent='✓ ¡Copiado!'; setTimeout(()=>{b.textContent='📋 Copiar';},2000); }
+        catch(e){ b.textContent='Copialo a mano del recuadro'; }
+      };
+      document.getElementById('descargar').onclick=()=>{
+        const blob=new Blob([cod],{type:'text/plain'});
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob);
+        a.download='estudiotrack-respaldo.txt';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      };
+    }catch(e){
+      document.getElementById('salida').innerHTML=`<div class="err">No pude generar el respaldo: ${esc(e.message||'')}</div>`;
+    }
+    btn.disabled=false; btn.textContent='📤 Generar respaldo';
+  };
+
+  const inp=document.getElementById('archivo-in');
+  document.getElementById('archivo-btn').onclick=()=>inp.click();
+  inp.onchange=()=>{
+    const f=inp.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ document.getElementById('codigo-in').value=String(r.result).trim(); };
+    r.readAsText(f);
+  };
+
+  const hacerRestaurar=async (modo)=>{
+    const cod=document.getElementById('codigo-in').value.trim();
+    if(!cod){ renderRespaldo('Pegá el código o cargá el archivo primero.'); return; }
+    if(modo==='reemplazar' && !confirm('Esto BORRA las materias que tenés en este dispositivo y las reemplaza por las del respaldo. ¿Seguimos?')) return;
+    try{
+      const n=await importarPerfil(cod, modo);
+      vista={tipo:'inicio'};
+      render();
+      setTimeout(()=>alert(`Listo: se restauraron ${n} materia${n===1?'':'s'}.`),100);
+    }catch(e){
+      renderRespaldo('No pude restaurar: '+(e.message||'código inválido'));
+    }
+  };
+  document.getElementById('restaurar').onclick=()=>hacerRestaurar('sumar');
+  document.getElementById('restaurar-r').onclick=()=>hacerRestaurar('reemplazar');
 }
 
 /* ---------- compartir materia ---------- */
@@ -1503,27 +1662,31 @@ async function abrirNodo(mid, nid, forzarNuevo){
       if(esSimulacro){
         // el examen final se genera solo (cubre todos los temas)
         const evitar=d.usadas[nid]||'';
-        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,true,evitar),4096);
-        if(!cont.preguntas||!cont.preguntas.length) throw new Error('El examen vino vacío');
-        d.usadas[nid]=[(d.usadas[nid]||''),cont.preguntas.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
-        d.contenido[nid]=cont;
+        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,true,evitar),8192);
+        const ok=limpiarPreguntas(cont.preguntas);
+        if(ok.length<5) throw new Error('El examen vino incompleto. Reintentá.');
+        d.usadas[nid]=[(d.usadas[nid]||''),ok.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
+        d.contenido[nid]={preguntas:ok};
       }else if(forzarNuevo && nodo.tipo==='quiz'){
         // reintento de quiz: solo el quiz, con preguntas nuevas
         const evitar=d.usadas[nid]||'';
-        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,false,evitar),3072);
-        if(!cont.preguntas||!cont.preguntas.length) throw new Error('El quiz vino vacío');
-        d.usadas[nid]=[(d.usadas[nid]||''),cont.preguntas.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
-        d.contenido[nid]=cont;
+        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,false,evitar),4096);
+        const ok=limpiarPreguntas(cont.preguntas);
+        if(ok.length<3) throw new Error('El quiz vino incompleto. Reintentá.');
+        d.usadas[nid]=[(d.usadas[nid]||''),ok.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
+        d.contenido[nid]={preguntas:ok};
       }else{
         // UN SOLO PEDIDO genera la lección Y el quiz de toda la unidad (ahorra cuota)
-        const cont=await iaJSON(pUnidad(m,d.apuntes,unidad),4096);
+        const cont=await iaJSON(pUnidad(m,d.apuntes,unidad),8192);
         if(!cont.leccion||!cont.quiz) throw new Error('La unidad vino incompleta');
+        const preguntasOk=limpiarPreguntas(cont.quiz.preguntas);
+        if(preguntasOk.length<3) throw new Error('La IA devolvió un quiz incompleto. Reintentá.');
         unidad.nodos.forEach((n,ni)=>{
           const id=`${ui}-${ni}`;
           if(n.tipo==='leccion') d.contenido[id]=cont.leccion;
           else if(n.tipo==='quiz'){
-            d.contenido[id]=cont.quiz;
-            d.usadas[id]=(cont.quiz.preguntas||[]).map(p=>p.q).join(' | ');
+            d.contenido[id]={preguntas:preguntasOk};
+            d.usadas[id]=preguntasOk.map(p=>p.q).join(' | ');
           }
         });
       }
@@ -1542,8 +1705,19 @@ async function abrirNodo(mid, nid, forzarNuevo){
   }
   const c=d.contenido[nid];
   if(!c){ vista={tipo:'camino',id:mid}; render(); alert('No se generó el contenido de este nodo. Probá de nuevo.'); return; }
-  if(nodo.tipo==='leccion') vista={tipo:'leccion',mid,nid,nodo,contenido:c};
-  else vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(c.preguntas||[]),i:0,aciertos:0,respondida:false};
+  if(nodo.tipo==='leccion'){
+    vista={tipo:'leccion',mid,nid,nodo,contenido:c};
+  }else{
+    const buenas=limpiarPreguntas(c.preguntas);
+    if(buenas.length<3){
+      // contenido viejo o roto: regenerar
+      if(!forzarNuevo){ return abrirNodo(mid,nid,true); }
+      vista={tipo:'camino',id:mid}; render();
+      alert('Este quiz quedó incompleto. Probá de nuevo en un momento.');
+      return;
+    }
+    vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(buenas),i:0,aciertos:0,respondida:false};
+  }
   render();
 }
 
