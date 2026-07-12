@@ -586,26 +586,50 @@ function parsearJSON(texto){
   const limpio = texto.replace(/```json|```/g,'').trim();
   const ini = limpio.indexOf('{');
   if(ini===-1) throw new Error('Respuesta sin JSON');
+
+  // 1) intento directo
   const cuerpo = limpio.slice(ini, limpio.lastIndexOf('}')+1);
-  try{ return JSON.parse(cuerpo); }
-  catch(e){
-    let s = limpio.slice(ini);
-    const ult = Math.max(s.lastIndexOf('}'), s.lastIndexOf(']'), s.lastIndexOf('"'));
-    if(ult>0) s = s.slice(0, ult+1);
-    const pila=[]; let enStr=false, escp=false;
-    for(const ch of s){
-      if(escp){escp=false;continue;}
-      if(ch==='\\'){escp=true;continue;}
-      if(ch==='"'){enStr=!enStr;continue;}
-      if(enStr) continue;
-      if(ch==='{') pila.push('}');
-      else if(ch==='[') pila.push(']');
-      else if(ch==='}'||ch===']') pila.pop();
+  try{ return JSON.parse(cuerpo); }catch(e){}
+
+  // 2) La respuesta vino cortada (típico al pedir muchas preguntas).
+  //    Recorro el texto y me quedo con el ÚLTIMO punto donde el JSON estaba sano,
+  //    descartando el objeto incompleto del final.
+  const s = limpio.slice(ini);
+  const pila=[];
+  let enStr=false, escp=false;
+  let cortes=[];   // posiciones donde se cerró un objeto dentro de un array
+  for(let i=0;i<s.length;i++){
+    const ch=s[i];
+    if(escp){ escp=false; continue; }
+    if(ch==='\\'){ escp=true; continue; }
+    if(ch==='"'){ enStr=!enStr; continue; }
+    if(enStr) continue;
+    if(ch==='{'||ch==='['){ pila.push(ch); }
+    else if(ch==='}'||ch===']'){
+      pila.pop();
+      // si al cerrar quedamos dentro de un array, este es un elemento completo
+      if(ch==='}' && pila.length && pila[pila.length-1]==='[') cortes.push(i);
     }
-    if(enStr) s+='"';
-    while(pila.length) s+=pila.pop();
-    return JSON.parse(s);
   }
+
+  // reconstruir cerrando en el último elemento completo del array
+  if(cortes.length){
+    const fin=cortes[cortes.length-1];
+    let recon=s.slice(0,fin+1);
+    // cerrar lo que haya quedado abierto (arrays y objetos externos)
+    const pila2=[]; let e2=false, s2=false;
+    for(const ch of recon){
+      if(s2){ if(e2){e2=false;continue;} if(ch==='\\'){e2=true;continue;} if(ch==='"'){s2=false;} continue; }
+      if(ch==='"'){ s2=true; continue; }
+      if(ch==='{') pila2.push('}');
+      else if(ch==='[') pila2.push(']');
+      else if(ch==='}'||ch===']') pila2.pop();
+    }
+    while(pila2.length) recon+=pila2.pop();
+    try{ return JSON.parse(recon); }catch(e){}
+  }
+
+  throw new Error('La IA devolvió una respuesta cortada. Probá de nuevo.');
 }
 
 async function iaJSON(prompt, maxTokens, sinJsonMime, temp){
@@ -690,17 +714,18 @@ NIVEL DE EXIGENCIA: el estudiante quiere sacarse ${m.objetivo}. ${ex.instruccion
 
 Generá DOS cosas en un solo JSON:
 1) Una lección sobre "${lec.titulo}" (temas: ${lec.temas||unidad.titulo}). ${ex.leccion}
-2) Un BANCO de 15 preguntas de opción múltiple que evalúen esa MISMA lección. (El estudiante va a ver 5 por vez; si falla, se le muestran otras 5 distintas. Por eso necesito 15 variadas entre sí, que no se pisen.)
+2) Un BANCO de 12 preguntas de opción múltiple que evalúen esa MISMA lección. (El estudiante ve 5 por vez; si falla, se le muestran otras distintas. Por eso necesito 12 variadas entre sí, que no se pisen.)
 
 REGLA DE COHERENCIA: cada pregunta tiene que poder responderse con lo que explicaste en la lección (resumen, puntos clave o ejemplo). Si vas a preguntar por un dato, una excepción o un detalle, ASEGURATE de haberlo incluido antes en la lección. No preguntes cosas del material que la lección no menciona.
 Esto NO significa hacer preguntas fáciles: mantené el nivel de exigencia indicado arriba. Las preguntas pueden exigir razonar, aplicar y distinguir entre conceptos parecidos — pero siempre sobre contenido que la lección efectivamente cubrió.
-VARIEDAD: las 15 tienen que atacar distintos ángulos de la lección (definiciones, aplicaciones, comparaciones, casos, excepciones). Que no haya dos preguntas que sean casi la misma.
+VARIEDAD: las 12 tienen que atacar distintos ángulos de la lección (definiciones, aplicaciones, comparaciones, casos, excepciones). Que no haya dos preguntas que sean casi la misma.
+SÉ CONCISO: preguntas y opciones cortas y al hueso, sin relleno. Explicaciones de máximo 15 palabras.
 
 Basate SOLO en los apuntes; si falta algo esencial, completá con conocimiento estándar de la materia. Las preguntas: 4 opciones plausibles y cortas, UNA sola correcta, en posición variada.
 
 Respondé SOLO con este JSON:
 {"leccion":{"resumen":"2-3 oraciones con la idea central","puntos":["6 a 8 puntos clave, 1-2 oraciones cada uno. Incluí los datos concretos, excepciones, plazos, porcentajes y distinciones finas que después vas a preguntar en el quiz"],"ejemplo":"un caso típico de examen, 2-4 oraciones"},"quiz":{"preguntas":[{"q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}]}}
-(el array "preguntas" tiene que traer las 15)`;
+(el array "preguntas" tiene que traer las 12)`;
 }
 
 function pQuiz(m, apuntes, nodo, esSimulacro, evitar){
@@ -1715,10 +1740,10 @@ async function abrirNodo(mid, nid, forzarNuevo){
         d.contenido[nid]={preguntas:previas.concat(ok), tanda:Math.floor(previas.length/5)};
       }else{
         // UN SOLO PEDIDO genera la lección Y el quiz de toda la unidad (ahorra cuota)
-        const cont=await iaJSON(pUnidad(m,d.apuntes,unidad),12288);
+        const cont=await iaJSON(pUnidad(m,d.apuntes,unidad),16384);
         if(!cont.leccion||!cont.quiz) throw new Error('La unidad vino incompleta');
         const banco=limpiarPreguntas(cont.quiz.preguntas);
-        if(banco.length<3) throw new Error('La IA devolvió un quiz incompleto. Reintentá.');
+        if(banco.length<3) throw new Error('La IA devolvió un quiz incompleto. Probá de nuevo.');
         unidad.nodos.forEach((n,ni)=>{
           const id=`${ui}-${ni}`;
           if(n.tipo==='leccion') d.contenido[id]=cont.leccion;
