@@ -496,8 +496,15 @@ function tieneClavePropia(){ return !!clavePropia; }
    Orden: 1) worker compartido  2) clave propia (plan B)
    ========================================================= */
 // Flash-Lite tiene la cuota gratuita más alta; se prueba primero.
-const MODELOS = ['gemini-2.5-flash-lite','gemini-flash-lite-latest','gemini-2.5-flash','gemini-flash-latest'];
+const MODELOS = [
+  'gemini-flash-lite-latest',   // alias: siempre apunta al Flash-Lite vigente
+  'gemini-2.5-flash-lite',
+  'gemini-flash-latest',        // alias: Flash vigente (3.5 en cuentas nuevas)
+  'gemini-2.5-flash'
+];
 let modeloActivo = st.get('et:modelo') || MODELOS[0];
+// si el modelo guardado ya no está en la lista, volver al primero
+if(!MODELOS.includes(modeloActivo)){ modeloActivo=MODELOS[0]; st.set('et:modelo',modeloActivo); }
 
 async function llamadaCruda(via, modelo, partes, generationConfig){
   // Gemini espera contents:[{parts:[...]}] — las partes van envueltas
@@ -546,8 +553,14 @@ async function llamadaConModelos(via, contents, generationConfig){
       if(modelo!==modeloActivo){modeloActivo=modelo;st.set('et:modelo',modelo);}
       return r;
     }catch(e){
-      if(e.message!=='MODELO_404') throw e;
       ultimoErr=e;
+      // Probar el siguiente modelo si: no existe (404), está saturado, o
+      // ESE modelo puntual está limitado en este proyecto (429).
+      // Otros errores (clave inválida, sin permiso) sí cortan: cambiar de modelo no ayuda.
+      if(e.message==='MODELO_404'||e.message==='SATURADO'||e.message==='LIMITE'||e.message==='LIMITE_DIA'){
+        continue;
+      }
+      throw e;
     }
   }
   throw ultimoErr||new Error('Ningún modelo disponible');
@@ -560,26 +573,27 @@ async function gemini(contents, generationConfig){
   if(BACKEND_URL) vias.push('backend');     // el motor compartido queda como respaldo
   if(!vias.length) throw new Error('SIN_MOTOR');
 
-  let ultimoErr;
+  let errPropia=null, ultimoErr=null;
   for(const via of vias){
     for(let intento=0;intento<2;intento++){
       try{
         return await llamadaConModelos(via, contents, generationConfig);
       }catch(e){
         ultimoErr=e;
+        if(via==='propia') errPropia=e;     // guardar el error REAL de la clave del usuario
         if(e.message==='LIMITE'){
-          // cuota por minuto: esperar y reintentar una vez; si persiste, probar la otra vía
           if(intento===0){ await new Promise(r=>setTimeout(r,5000)); continue; }
           break;
         }
-        if(e.message==='CLAVE_INVALIDA'){ break; } // esta vía no sirve, probar la otra
-        // error genérico: un reintento corto
+        if(e.message==='CLAVE_INVALIDA'||e.message==='SIN_PERMISO'){ break; }
         if(intento===0){ await new Promise(r=>setTimeout(r,1200)); continue; }
         break;
       }
     }
   }
-  throw ultimoErr;
+  // Si el usuario tiene clave propia, mostrar SU error (no el del worker compartido),
+  // que es el único que puede accionar.
+  throw (errPropia || ultimoErr);
 }
 
 function parsearJSON(texto){
@@ -1158,12 +1172,31 @@ function renderAjustes(err){
       <div id="err-clave">${err?`<div class="err">${esc(err)}</div>`:''}</div>
       <button class="btn" id="guardar">Guardar y probar</button>
       ${tiene?'<button class="btn sec" id="quitar-clave">Quitar mi clave</button>':''}
+      ${tiene?'<button class="btn sec" id="diagnostico">🔍 Probar qué modelos funcionan</button>':''}
+      <div id="salida-diag"></div>
       <hr style="border:none;border-top:1.5px solid var(--borde);margin:22px 0">
       <button class="btn sec" id="ir-respaldo">📦 Pasar mis datos a otro dispositivo</button>
       <button class="btn sec" id="cancelar">Volver</button>
     </div>`;
   wireMarca();
   document.getElementById('cancelar').onclick=()=>{vista=volver;render();};
+  const dg=document.getElementById('diagnostico');
+  if(dg) dg.onclick=async ()=>{
+    const out=document.getElementById('salida-diag');
+    dg.disabled=true; dg.textContent='Probando…';
+    out.innerHTML='<p class="hint">Probando cada modelo con tu clave…</p>';
+    const lineas=[];
+    for(const modelo of MODELOS){
+      try{
+        await llamadaCruda('propia', modelo, [{text:'Decí solo: ok'}], {maxOutputTokens:20});
+        lineas.push(`<div style="color:var(--aprobado);font-weight:600">✓ ${modelo} — funciona</div>`);
+      }catch(e){
+        lineas.push(`<div style="color:var(--error)">✗ ${modelo} — ${esc(mensajeError(e))}</div>`);
+      }
+    }
+    out.innerHTML=`<div class="codigo-box" style="font-family:inherit;font-size:13px;max-height:none">${lineas.join('')}</div>`;
+    dg.disabled=false; dg.textContent='🔍 Probar qué modelos funcionan';
+  };
   const irb=document.getElementById('ir-respaldo');
   if(irb) irb.onclick=()=>{vista={tipo:'respaldo'};render();};
   const q=document.getElementById('quitar-clave');
