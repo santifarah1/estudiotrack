@@ -1749,7 +1749,7 @@ async function abrirNodo(mid, nid, forzarNuevo){
   const unidad=d.plan.unidades[ui];
   const esSimulacro=nodo.tipo==='simulacro';
 
-  // REINTENTO GRATIS: si es un quiz y todavía queda banco sin usar, cambiar de tanda
+  // REINTENTO GRATIS: solo para quizzes de unidad (el examen final siempre se regenera entero)
   if(forzarNuevo && nodo.tipo==='quiz' && siguienteTanda(mid,nid)){
     forzarNuevo=false;      // no hace falta llamar a la IA
     d=datosMateria(mid);    // RELEER: siguienteTanda actualizó la tanda en disco
@@ -1765,9 +1765,9 @@ async function abrirNodo(mid, nid, forzarNuevo){
         const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,true,evitar),8192,false,0.85);
         let ok=limpiarPreguntas(cont.preguntas);
         ok=quitarRepetidas(ok, evitar);          // el examen final nunca repite
-        if(ok.length<5) throw new Error('La IA repitió preguntas del examen anterior. Probá de nuevo en un momento.');
+        if(ok.length<6) throw new Error('El examen vino incompleto. Probá de nuevo.');
         d.usadas[nid]=[(d.usadas[nid]||''),ok.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
-        d.contenido[nid]={preguntas:ok};
+        d.contenido[nid]={preguntas:ok};   // el examen final se rinde entero, sin tandas
       }else if(forzarNuevo && nodo.tipo==='quiz'){
         // reintento: pedir preguntas NUEVAS a la IA solo si el banco local ya se agotó
         const evitar=d.usadas[nid]||'';
@@ -1828,14 +1828,20 @@ async function abrirNodo(mid, nid, forzarNuevo){
       alert('Este quiz quedó incompleto. Probá de nuevo en un momento.');
       return;
     }
-    // servir 5 preguntas del banco según la tanda actual (solo tandas completas)
-    const POR_TANDA=5;
-    const tandas=tandasDe(buenas);
-    const t=((c.tanda||0)%tandas);
-    let lote=buenas.slice(t*POR_TANDA,(t+1)*POR_TANDA);
-    if(lote.length<POR_TANDA) lote=buenas.slice(0,POR_TANDA);  // banco chico
-    vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(lote),i:0,aciertos:0,respondida:false,
-           tandaActual:t, tandasTotales:tandas};
+    if(nodo.tipo==='simulacro'){
+      // EXAMEN FINAL: se rinde entero, sin tandas. Todas las preguntas de una.
+      vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(buenas),i:0,aciertos:0,respondida:false,
+             tandaActual:0, tandasTotales:1};
+    }else{
+      // quiz de unidad: 5 preguntas por tanda (reintentos gratis con preguntas distintas)
+      const POR_TANDA=5;
+      const tandas=tandasDe(buenas);
+      const t=((c.tanda||0)%tandas);
+      let lote=buenas.slice(t*POR_TANDA,(t+1)*POR_TANDA);
+      if(lote.length<POR_TANDA) lote=buenas.slice(0,POR_TANDA);
+      vista={tipo:'quiz',mid,nid,nodo,preguntas:barajar(lote),i:0,aciertos:0,respondida:false,
+             tandaActual:t, tandasTotales:tandas};
+    }
   }
   render();
 }
@@ -1883,7 +1889,7 @@ function renderQuiz(){
   const html=`
     <button class="volver" id="volver">← Volver al camino</button>
     <div class="card">
-      <div class="q-num">${nombreTipo(vista.nodo.tipo)} · Pregunta ${vista.i+1} de ${total}${vista.tandasTotales>1?` · serie ${(vista.tandaActual||0)+1}/${vista.tandasTotales}`:''}</div>
+      <div class="q-num">${nombreTipo(vista.nodo.tipo)} · Pregunta ${vista.i+1} de ${total}${(vista.tandasTotales>1&&vista.nodo.tipo!=='simulacro')?` · serie ${(vista.tandaActual||0)+1}/${vista.tandasTotales}`:''}</div>
       <div class="q-texto">${esc(q.q)}</div>
       <div id="ops">
         ${q.opciones.map((o,i)=>`<button class="opcion" data-i="${i}">${esc(o)}</button>`).join('')}
@@ -1931,7 +1937,7 @@ function renderResultado(total){
       <p><strong>${aprobado?'¡Aprobado!':'Todavía no'}</strong> — equivale a un ${nota} más o menos.</p>
       <p class="sub">${repasoLibre
           ?'Modo repaso: practicaste este quiz sin afectar tu progreso.'
-          :(aprobado?'Nodo completado. Seguí el camino.':`Con objetivo ${esc(m?m.objetivo:'8+')} necesitás ${ex.umbral}% para avanzar. Repasá la lección y reintentá${vista.tandasTotales>1?': te esperan preguntas distintas':''}.`)}</p>
+          :(aprobado?'Nodo completado. Seguí el camino.':`Con objetivo ${esc(m?m.objetivo:'8+')} necesitás ${ex.umbral}% para avanzar. ${vista.nodo.tipo==='simulacro'?'Repasá las unidades flojas y volvé a rendir: el examen se arma de nuevo con otras preguntas.':`Repasá la lección y reintentá${vista.tandasTotales>1?': te esperan preguntas distintas':''}.`}`)}</p>
       <div class="acciones-pie">
         ${repasoLibre
           ?`<button class="btn sec" id="volverBtn">Volver al camino</button><button class="btn" id="reint">Practicar otra vez</button>`
