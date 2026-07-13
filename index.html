@@ -500,14 +500,17 @@ function tieneClavePropia(){ return !!clavePropia; }
 // Los alias resuelven al modelo más nuevo (Flash 3.5 = $1.50/$9 por millón),
 // que es 20x más caro que Flash-Lite ($0.10/$0.40). Para esta app, Flash-Lite sobra.
 const MODELOS = [
-  'gemini-2.5-flash-lite',        // el más barato: $0.10 in / $0.40 out
-  'gemini-3.1-flash-lite',        // Flash-Lite de la gen 3: $0.25 in / $1.50 out
-  'gemini-2.5-flash',             // respaldo: $0.30 in / $2.50 out
-  'gemini-flash-lite-latest'      // último recurso (puede resolver a uno caro)
+  'gemini-3.1-flash-lite',        // el Flash-Lite vigente: $0.25 in / $1.50 out
+  'gemini-2.5-flash-lite',        // más barato aún, pero retirado para cuentas nuevas
+  'gemini-3-flash-lite',          // variante alternativa
+  'gemini-2.5-flash'              // respaldo viejo
 ];
+// NUNCA usar aliases 'latest': resuelven al modelo más nuevo (Flash 3.5),
+// que cuesta $1.50/$9 por millón — 6 veces más caro que Flash-Lite.
 let modeloActivo = st.get('et:modelo') || MODELOS[0];
-// Si el modelo guardado no está en la lista, o es un alias caro, volver al barato.
-if(!MODELOS.includes(modeloActivo) || /latest/.test(modeloActivo)){
+// Forzar el modelo económico: descartar aliases 'latest' (resuelven al Flash caro)
+// y cualquier modelo que ya no esté en la lista vigente.
+if(!MODELOS.includes(modeloActivo) || /latest/.test(modeloActivo) || !/lite/.test(modeloActivo)){
   modeloActivo=MODELOS[0];
   st.set('et:modelo',modeloActivo);
 }
@@ -755,11 +758,10 @@ function pUnidad(m, apuntes, unidad){
   const lec=unidad.nodos.find(n=>n.tipo==='leccion')||{titulo:unidad.titulo,temas:unidad.titulo};
   const qz=unidad.nodos.find(n=>n.tipo==='quiz')||{titulo:unidad.titulo,temas:unidad.titulo};
   const ex=exigencia(m.objetivo);
-  const material=fragmentoRelevante(apuntes, unidad);   // solo la parte que corresponde a esta unidad
   return `Sos un tutor universitario argentino (voseo, tono directo). Materia: "${m.nombre}".
-Apuntes del estudiante (fragmento relevante a esta unidad):
+Apuntes del estudiante:
 ---
-${recortar(material, 60000)}
+${recortar(apuntes)}
 ---
 Unidad a preparar: "${unidad.titulo}".
 
