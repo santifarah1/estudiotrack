@@ -496,15 +496,21 @@ function tieneClavePropia(){ return !!clavePropia; }
    Orden: 1) worker compartido  2) clave propia (plan B)
    ========================================================= */
 // Flash-Lite tiene la cuota gratuita más alta; se prueba primero.
+// IMPORTANTE: nombres EXPLÍCITOS, nunca aliases "latest".
+// Los alias resuelven al modelo más nuevo (Flash 3.5 = $1.50/$9 por millón),
+// que es 20x más caro que Flash-Lite ($0.10/$0.40). Para esta app, Flash-Lite sobra.
 const MODELOS = [
-  'gemini-flash-lite-latest',   // alias vigente: el que funciona en cuentas nuevas
-  'gemini-2.5-flash-lite',      // respaldo para proyectos viejos
-  'gemini-2.5-flash',
-  'gemini-flash-latest'
+  'gemini-2.5-flash-lite',        // el más barato: $0.10 in / $0.40 out
+  'gemini-3.1-flash-lite',        // Flash-Lite de la gen 3: $0.25 in / $1.50 out
+  'gemini-2.5-flash',             // respaldo: $0.30 in / $2.50 out
+  'gemini-flash-lite-latest'      // último recurso (puede resolver a uno caro)
 ];
 let modeloActivo = st.get('et:modelo') || MODELOS[0];
-// si el modelo guardado ya no está en la lista, volver al primero
-if(!MODELOS.includes(modeloActivo)){ modeloActivo=MODELOS[0]; st.set('et:modelo',modeloActivo); }
+// Si el modelo guardado no está en la lista, o es un alias caro, volver al barato.
+if(!MODELOS.includes(modeloActivo) || /latest/.test(modeloActivo)){
+  modeloActivo=MODELOS[0];
+  st.set('et:modelo',modeloActivo);
+}
 
 async function llamadaCruda(via, modelo, partes, generationConfig){
   // Gemini espera contents:[{parts:[...]}] — las partes van envueltas
@@ -675,6 +681,35 @@ function sanitizarTexto(txt){
     .replace(/[ \t]{3,}/g,'  ')
     .replace(/\n{4,}/g,'\n\n\n');
 }
+// Extrae del material la porción relevante a una unidad (evita mandar TODO en cada pedido).
+// Busca las palabras clave del título/temas y devuelve el fragmento alrededor.
+function fragmentoRelevante(apuntes, unidad, maxChars=18000){
+  if(!apuntes || apuntes.length<=maxChars) return apuntes;
+  const claves=[];
+  claves.push(unidad.titulo||'');
+  (unidad.nodos||[]).forEach(n=>{ claves.push(n.titulo||''); claves.push(n.temas||''); });
+  const palabras=claves.join(' ')
+    .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .split(/[^a-z0-9]+/)
+    .filter(w=>w.length>4);              // palabras significativas
+  if(!palabras.length) return apuntes.slice(0,maxChars);
+
+  const texto=apuntes.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  // puntuar bloques del material según cuántas palabras clave contienen
+  const BLOQUE=3000;
+  const bloques=[];
+  for(let i=0;i<apuntes.length;i+=BLOQUE){
+    const trozo=texto.slice(i,i+BLOQUE);
+    let puntos=0;
+    palabras.forEach(p=>{ if(trozo.includes(p)) puntos++; });
+    bloques.push({i, puntos});
+  }
+  bloques.sort((a,b)=>b.puntos-a.puntos);
+  const elegidos=bloques.slice(0, Math.ceil(maxChars/BLOQUE)).sort((a,b)=>a.i-b.i);
+  if(!elegidos.length || elegidos[0].puntos===0) return apuntes.slice(0,maxChars);
+  return elegidos.map(b=>apuntes.slice(b.i,b.i+BLOQUE)).join('\n[...]\n');
+}
+
 function recortar(txt, max=120000){
   txt = sanitizarTexto(txt);
   return txt.length>max ? txt.slice(0,max)+'\n[apuntes recortados]' : txt;
@@ -720,10 +755,11 @@ function pUnidad(m, apuntes, unidad){
   const lec=unidad.nodos.find(n=>n.tipo==='leccion')||{titulo:unidad.titulo,temas:unidad.titulo};
   const qz=unidad.nodos.find(n=>n.tipo==='quiz')||{titulo:unidad.titulo,temas:unidad.titulo};
   const ex=exigencia(m.objetivo);
+  const material=fragmentoRelevante(apuntes, unidad);   // solo la parte que corresponde a esta unidad
   return `Sos un tutor universitario argentino (voseo, tono directo). Materia: "${m.nombre}".
-Apuntes del estudiante:
+Apuntes del estudiante (fragmento relevante a esta unidad):
 ---
-${recortar(apuntes)}
+${recortar(material, 60000)}
 ---
 Unidad a preparar: "${unidad.titulo}".
 
@@ -1175,6 +1211,7 @@ function renderAjustes(err){
       <div id="err-clave">${err?`<div class="err">${esc(err)}</div>`:''}</div>
       <button class="btn" id="guardar">Guardar y probar</button>
       ${tiene?'<button class="btn sec" id="quitar-clave">Quitar mi clave</button>':''}
+      ${tiene?`<p class="hint" style="margin-top:12px">⚙️ Modelo en uso: <strong>${esc(modeloActivo)}</strong>${/lite/.test(modeloActivo)?' <span style="color:var(--aprobado)">(económico ✓)</span>':' <span style="color:var(--error)">(¡ojo, este es caro!)</span>'}</p>`:''}
       ${tiene?'<button class="btn sec" id="diagnostico">🔍 Probar qué modelos funcionan</button>':''}
       <div id="salida-diag"></div>
       <hr style="border:none;border-top:1.5px solid var(--borde);margin:22px 0">
