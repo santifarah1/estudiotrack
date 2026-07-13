@@ -783,8 +783,8 @@ Respondé SOLO con este JSON:
 (el array "preguntas" tiene que traer las 15)`;
 }
 
-function pQuiz(m, apuntes, nodo, esSimulacro, evitar){
-  const n = esSimulacro ? 10 : 5;
+function pQuiz(m, apuntes, nodo, esSimulacro, evitar, cuantas){
+  const n = cuantas || (esSimulacro ? 10 : 5);
   const alcance = esSimulacro
     ? 'TODO el material, de principio a fin. Recorré los apuntes ENTEROS y repartí las preguntas de forma pareja entre los distintos temas: algunas del principio, otras del medio y otras del final. NO te concentres solo en los primeros temas. Dificultad de examen final.'
     : `"${nodo.titulo}" (temas: ${nodo.temas})`;
@@ -797,6 +797,7 @@ ${recortar(apuntes)}
 NIVEL DE EXIGENCIA: el estudiante quiere sacarse ${m.objetivo}. ${ex.instruccion}
 
 Armá ${n} preguntas de opción múltiple sobre ${alcance} Basate en los apuntes. 4 opciones plausibles y cortas, UNA sola correcta, en posición variada. Explicación breve.
+${n>=15?'IMPORTANTE: las '+n+' preguntas tienen que ser variadas entre sí, atacando distintos ángulos del tema. No repitas enfoques.':''}
 ${evitar?`\n\n🚫 PROHIBIDO REPETIR: el estudiante YA respondió estas preguntas y las está reintentando. Tenés que generar preguntas TOTALMENTE NUEVAS: otros conceptos, otros ángulos, otros casos del material. No sirve reformular o cambiarle las palabras a estas; tienen que ser preguntas distintas de verdad. Si un tema ya fue preguntado, elegí otro aspecto de ese tema.\n\nPreguntas YA USADAS (no repetir ninguna):\n${evitar.slice(0,2500)}`:''}
 Respondé SOLO con este JSON:
 {"preguntas":[{"q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}]}`;
@@ -1765,14 +1766,17 @@ function pintarContenido(contenidoHTML, wireContenido){
 // cuántas tandas COMPLETAS de 5 entran en el banco (descarta el resto suelto)
 function tandasDe(banco){ return Math.max(1, Math.floor(banco.length/5)); }
 
+// Avanza a la siguiente serie del banco.
+// Devuelve false cuando YA NO QUEDAN series sin usar: ahí hay que pedir preguntas nuevas a la IA.
 function siguienteTanda(mid,nid){
   const d=datosMateria(mid);
   const c=d.contenido[nid];
   if(!c||!c.preguntas) return false;
   const buenas=limpiarPreguntas(c.preguntas);
   const tandas=tandasDe(buenas);
-  if(tandas<2) return false;                       // no hay banco extra: hay que pedir a la IA
-  c.tanda=((c.tanda||0)+1)%tandas;
+  const actual=c.tanda||0;
+  if(actual+1 >= tandas) return false;   // se acabó el banco: NO volver a la serie 1
+  c.tanda=actual+1;
   guardarMateria(mid,d);
   return true;
 }
@@ -1810,14 +1814,14 @@ async function abrirNodo(mid, nid, forzarNuevo){
       }else if(forzarNuevo && nodo.tipo==='quiz'){
         // reintento: pedir preguntas NUEVAS a la IA solo si el banco local ya se agotó
         const evitar=d.usadas[nid]||'';
-        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,false,evitar),6144,false,0.9);
+        // Banco agotado: pedir un LOTE NUEVO de preguntas (15, para 3 series más)
+        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,false,evitar,15),8192,false,0.95);
         let ok=limpiarPreguntas(cont.preguntas);
         ok=quitarRepetidas(ok, evitar);
-        if(ok.length<3) throw new Error('La IA repitió las preguntas anteriores. Probá de nuevo en un momento.');
+        if(ok.length<3) throw new Error('No pude generar preguntas nuevas distintas. Probá de nuevo en un momento.');
         d.usadas[nid]=[(d.usadas[nid]||''),ok.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
-        // sumar las nuevas al banco existente
-        const previas=(d.contenido[nid]&&d.contenido[nid].preguntas)||[];
-        d.contenido[nid]={preguntas:previas.concat(ok), tanda:Math.floor(previas.length/5)};
+        // reemplazar el banco por el nuevo y volver a la serie 1
+        d.contenido[nid]={preguntas:ok, tanda:0};
       }else{
         // UN SOLO PEDIDO genera la lección Y el quiz de toda la unidad (ahorra cuota)
         const cont=await iaJSON(pUnidad(m,d.apuntes,unidad),16384);
