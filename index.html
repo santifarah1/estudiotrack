@@ -212,6 +212,26 @@
   .logros-resumen .lr-t{font-weight:700;font-size:14.5px}
   .logros-resumen .lr-s{font-size:12.5px;color:#5A6780;margin-top:1px}
   .logros-resumen .lr-fl{font-size:18px;opacity:.5}
+  /* --- listo para rendir --- */
+  .diag-global{text-align:center;padding:20px 16px;background:var(--carta);border:1.5px solid var(--borde);border-radius:16px;box-shadow:var(--sombra);margin-top:14px}
+  .diag-global .dg-num{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:46px;line-height:1}
+  .diag-global .dg-txt{font-size:14px;color:#5A6780;margin-top:6px}
+  .diag-global.verde .dg-num{color:var(--aprobado)}
+  .diag-global.amarillo .dg-num{color:#C99A2E}
+  .diag-global.rojo .dg-num{color:var(--error)}
+  .diag-u{display:flex;align-items:center;gap:12px;background:var(--carta);border:1.5px solid var(--borde);border-radius:14px;padding:13px 15px;margin-top:10px}
+  .diag-u .du-ico{font-size:22px;flex-shrink:0}
+  .diag-u .du-tx{flex:1;min-width:0}
+  .diag-u .du-t{font-weight:700;font-size:14px;line-height:1.3}
+  .diag-u .du-s{font-size:12.5px;color:#5A6780;margin-top:2px}
+  .diag-u .du-pct{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:17px;flex-shrink:0}
+  .diag-u.bien{border-color:var(--aprobado);background:var(--aprobado-claro)}
+  .diag-u.bien .du-pct{color:var(--aprobado)}
+  .diag-u.medio{border-color:#E8C22E;background:#FFF9E3}
+  .diag-u.medio .du-pct{color:#C99A2E}
+  .diag-u.flojo{border-color:var(--error);background:#FDEDED}
+  .diag-u.flojo .du-pct{color:var(--error)}
+  .diag-u.vacio{opacity:.6}
   .codigo-box{background:var(--papel);border:1.5px solid var(--borde);border-radius:12px;padding:12px;font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;max-height:120px;overflow-y:auto;color:#5A6780;margin-top:10px}
   .info-cuota{background:#EEF3FF;border:1.5px solid #7FA0E0;border-radius:12px;padding:13px 15px;font-size:13px;margin-top:12px;line-height:1.45}
   .info-cuota strong{display:block;margin-bottom:4px}
@@ -476,6 +496,119 @@ async function importarPerfil(codigo, modo){
   if(p.clave && !clavePropia){ clavePropia=p.clave; st.set('et:key',clavePropia); }
 
   return (p.materias||[]).length;
+}
+
+/* =========================================================
+   REGISTRO DE DESEMPEÑO + REPASO ESPACIADO
+   Guarda qué preguntas fallaste, de qué unidad, y cuándo toca repasarlas.
+   Es la base de "Listo para rendir" y del repaso espaciado.
+   ========================================================= */
+
+// Estructura por materia: d.desempenio = {
+//   porUnidad: { "0": {ok:5, mal:2}, "1": {...} },
+//   fallos: [ {q, opciones, correcta, explicacion, uid, ui, vistas, aciertos, proximo} ]
+// }
+function desempenioDe(d){
+  if(!d.desempenio) d.desempenio={porUnidad:{}, fallos:[]};
+  if(!d.desempenio.porUnidad) d.desempenio.porUnidad={};
+  if(!d.desempenio.fallos) d.desempenio.fallos=[];
+  return d.desempenio;
+}
+
+// Intervalos de repaso espaciado (en días): 1, 3, 7, 16
+// Cada vez que acertás una pregunta que habías fallado, se aleja más en el tiempo.
+const INTERVALOS=[1,3,7,16];
+function proximaFecha(aciertosSeguidos){
+  const dias=INTERVALOS[Math.min(aciertosSeguidos, INTERVALOS.length-1)];
+  return Date.now() + dias*86400000;
+}
+
+// Registra el resultado de una pregunta respondida
+function registrarRespuesta(mid, nid, pregunta, acerto){
+  const d=datosMateria(mid);
+  if(!d) return;
+  const des=desempenioDe(d);
+  const ui=String(nid).split('-')[0];   // índice de la unidad
+
+  // 1. estadística por unidad (para "Listo para rendir")
+  if(!des.porUnidad[ui]) des.porUnidad[ui]={ok:0, mal:0};
+  if(acerto) des.porUnidad[ui].ok++;
+  else des.porUnidad[ui].mal++;
+
+  // 2. cola de repaso espaciado
+  const uid=normQ(pregunta.q);                     // identificador de la pregunta
+  const idx=des.fallos.findIndex(f=>f.uid===uid);
+
+  if(!acerto){
+    if(idx===-1){
+      // primera vez que la fallás: entra a la cola para mañana
+      des.fallos.push({
+        uid, ui,
+        q:pregunta.q, opciones:pregunta.opciones, correcta:pregunta.correcta,
+        explicacion:pregunta.explicacion||'',
+        vistas:1, aciertos:0,
+        proximo: proximaFecha(0)
+      });
+    }else{
+      // la volviste a fallar: se reinicia el ciclo
+      des.fallos[idx].vistas++;
+      des.fallos[idx].aciertos=0;
+      des.fallos[idx].proximo=proximaFecha(0);
+    }
+  }else if(idx!==-1){
+    // acertaste una que habías fallado: se aleja en el tiempo
+    const f=des.fallos[idx];
+    f.vistas++;
+    f.aciertos++;
+    if(f.aciertos>=3){
+      des.fallos.splice(idx,1);        // dominada: sale de la cola
+    }else{
+      f.proximo=proximaFecha(f.aciertos);
+    }
+  }
+  guardarMateria(mid,d);
+}
+
+// Preguntas que toca repasar hoy (de todas las materias, o de una)
+function pendientesDeRepaso(mid){
+  const ahora=Date.now();
+  const lista=[];
+  const ms = mid ? materias.filter(m=>m.id===mid) : materias;
+  ms.forEach(m=>{
+    const d=datosMateria(m.id);
+    if(!d||!d.desempenio) return;
+    (d.desempenio.fallos||[]).forEach(f=>{
+      if(f.proximo<=ahora) lista.push({...f, mid:m.id, materia:m.nombre});
+    });
+  });
+  return lista;
+}
+
+// Diagnóstico por unidad para "Listo para rendir"
+function diagnostico(mid){
+  const m=materias.find(x=>x.id===mid);
+  const d=datosMateria(mid);
+  if(!m||!d||!d.plan) return null;
+  const des=desempenioDe(d);
+  const unidades=d.plan.unidades.map((u,ui)=>{
+    const st=des.porUnidad[String(ui)]||{ok:0,mal:0};
+    const total=st.ok+st.mal;
+    const pct= total>0 ? Math.round(st.ok/total*100) : null;
+    const planos=nodosPlanos(d);
+    const nodosU=planos.filter(n=>n.id.startsWith(ui+'-'));
+    const hechos=nodosU.filter(n=>d.completados[n.id]).length;
+    return {
+      ui, titulo:u.titulo,
+      ok:st.ok, mal:st.mal, total, pct,
+      completada: nodosU.length>0 && hechos===nodosU.length,
+      sinDatos: total===0
+    };
+  }).filter(u=>u.titulo!=='Recta final');
+  const conDatos=unidades.filter(u=>!u.sinDatos);
+  const global = conDatos.length
+    ? Math.round(conDatos.reduce((a,u)=>a+u.ok,0) / Math.max(1,conDatos.reduce((a,u)=>a+u.total,0)) * 100)
+    : null;
+  return {materia:m, unidades, global, aRepasar:pendientesDeRepaso(mid).length};
 }
 
 /* =========================================================
@@ -1018,7 +1151,7 @@ function pintarArchivos(){
 /* ---------- helpers ---------- */
 function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML;}
 function iconoNodo(t){return t==='leccion'?'📖':t==='quiz'?'✏️':'🎯';}
-function nombreTipo(t){return t==='leccion'?'Lección':t==='quiz'?'Quiz':'Simulacro';}
+function nombreTipo(t){return t==='leccion'?'Lección':t==='quiz'?'Quiz':t==='repaso'?'Repaso':'Simulacro';}
 function nodosPlanos(datos){
   const lista=[];
   datos.plan.unidades.forEach((u,ui)=>u.nodos.forEach((n,ni)=>lista.push({...n,id:`${ui}-${ni}`})));
@@ -1133,6 +1266,7 @@ function barajar(preguntas){
 function render(){
   const t=vista.tipo;
   if(t==='inicio')renderInicio();
+  else if(t==='diagnostico')renderDiagnostico();
   else if(t==='respaldo')renderRespaldo();
   else if(t==='compartir')renderCompartir();
   else if(t==='importar')renderImportar();
@@ -1356,6 +1490,106 @@ function renderAjustes(err){
       if(!dgBtn) renderAjustes(null);
     }
   };
+}
+
+/* ---------- listo para rendir (diagnóstico) ---------- */
+function renderDiagnostico(){
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
+  const dg=diagnostico(vista.id);
+  if(!dg){vista={tipo:'inicio'};render();return;}
+  const m=dg.materia;
+  const dias=diasRestantes(m.fecha);
+  const ex=exigencia(m.objetivo);
+
+  // clasificar unidades
+  const flojas=dg.unidades.filter(u=>!u.sinDatos && u.pct<ex.umbral);
+  const medias=dg.unidades.filter(u=>!u.sinDatos && u.pct>=ex.umbral && u.pct<85);
+  const buenas=dg.unidades.filter(u=>!u.sinDatos && u.pct>=85);
+  const sinHacer=dg.unidades.filter(u=>u.sinDatos);
+
+  let clase='rojo', veredicto='Todavía te falta', consejo='';
+  if(dg.global===null){
+    veredicto='Sin datos todavía';
+    consejo='Hacé algunos quizzes y volvé: acá te voy a mostrar en qué temas estás firme y en cuáles flojeás.';
+  }else if(dg.global>=85 && sinHacer.length===0){
+    clase='verde'; veredicto='¡Estás listo!';
+    consejo='Dominás el material. Repasá lo poco que falte y andá tranquilo.';
+  }else if(dg.global>=ex.umbral){
+    clase='amarillo'; veredicto='Vas bien, pero afiná';
+    consejo = flojas.length
+      ? `Concentrate en ${flojas.length===1?'la unidad floja':'las '+flojas.length+' unidades flojas'} de abajo.`
+      : 'Seguí completando las unidades que te faltan.';
+  }else{
+    clase='rojo'; veredicto='Hay que meterle';
+    consejo='Estás por debajo de tu objetivo. Repasá las unidades en rojo antes de seguir avanzando.';
+  }
+
+  const fila=(u)=>{
+    if(u.sinDatos) return `<div class="diag-u vacio">
+      <span class="du-ico">⚪</span>
+      <span class="du-tx"><span class="du-t">${esc(u.titulo)}</span><span class="du-s">Todavía no la hiciste</span></span>
+    </div>`;
+    const cls = u.pct>=85?'bien' : u.pct>=ex.umbral?'medio' : 'flojo';
+    const ico = u.pct>=85?'✅' : u.pct>=ex.umbral?'⚠️' : '🔴';
+    const txt = u.pct>=85?'La tenés dominada' : u.pct>=ex.umbral?'Aceptable, podés afinar' : 'Necesita repaso';
+    return `<div class="diag-u ${cls}">
+      <span class="du-ico">${ico}</span>
+      <span class="du-tx">
+        <span class="du-t">${esc(u.titulo)}</span>
+        <span class="du-s">${txt} · ${u.ok} de ${u.total} preguntas bien</span>
+      </span>
+      <span class="du-pct">${u.pct}%</span>
+    </div>`;
+  };
+
+  // ordenar: primero lo flojo (es lo accionable)
+  const ordenadas=[...flojas, ...medias, ...buenas, ...sinHacer];
+
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver">← Volver al camino</button>
+    <div class="card">
+      <h2>¿Listo para rendir?</h2>
+      <p class="sub">${esc(m.nombre)} · ${dias===0?'¡Es hoy!':`faltan ${dias} día${dias===1?'':'s'}`} · objetivo ${esc(m.objetivo)}</p>
+
+      <div class="diag-global ${clase}">
+        <div class="dg-num">${dg.global===null?'—':dg.global+'%'}</div>
+        <div class="dg-txt"><strong>${veredicto}</strong></div>
+        <div class="dg-txt">${consejo}</div>
+      </div>
+
+      ${dg.aRepasar>0?`<button class="seguir-hoy" id="ir-repaso" style="margin-top:14px">
+        <span class="ico">🔁</span>
+        <span class="tx">
+          <span class="et">Repaso pendiente</span>
+          <span class="ti">${dg.aRepasar} pregunta${dg.aRepasar===1?'':'s'} para repasar</span>
+          <span class="ma">Las que fallaste, servidas en el momento justo</span>
+        </span>
+        <span class="flecha">→</span>
+      </button>`:''}
+
+      <h2 style="font-size:19px;margin-top:22px">Tema por tema</h2>
+      <p class="sub">Ordenado por lo que más necesita tu atención.</p>
+      ${ordenadas.map(fila).join('')}
+    </div>`;
+  wireMarca();
+  document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:m.id};render();};
+  const ir=document.getElementById('ir-repaso');
+  if(ir) ir.onclick=()=>{ iniciarRepaso(m.id); };
+}
+
+/* ---------- repaso espaciado ---------- */
+function iniciarRepaso(mid){
+  const pend=pendientesDeRepaso(mid);
+  if(!pend.length){
+    alert('No tenés preguntas para repasar ahora. ¡Buen síntoma!');
+    return;
+  }
+  const preguntas=barajar(pend).slice(0,10);
+  vista={tipo:'quiz', mid, nid:'repaso', nodo:{tipo:'repaso', titulo:'Repaso'},
+         preguntas, i:0, aciertos:0, respondida:false, esRepaso:true,
+         tandaActual:0, tandasTotales:1};
+  render();
 }
 
 /* ---------- respaldo / sincronizar dispositivos ---------- */
@@ -1762,8 +1996,12 @@ function archivarMateria(mid){
   return Math.max(0, antes-despues);
 }
 
-function accionesHTML(){
+function accionesHTML(mid){
+  const pend = mid ? pendientesDeRepaso(mid).length : 0;
   return `
+    <button class="btn sec" id="ir-diagnostico" style="margin-top:16px">
+      🎯 ¿Listo para rendir?${pend>0?` · ${pend} para repasar`:''}
+    </button>
     <div class="acciones-pie">
       <button class="btn sec chico ${repasoLibre?'repaso-on':''}" id="repaso">${repasoLibre?'✓ Repaso':'🔁 Modo repaso'}</button>
       <button class="btn sec chico" id="compartir">📤 Compartir</button>
@@ -1788,6 +2026,8 @@ function wireCamino(m,d){
   if(bs) bs.onclick=()=>{repasoLibre=false;render();};
   const br=document.getElementById('repaso');
   if(br) br.onclick=()=>{repasoLibre=!repasoLibre;render();};
+  const bd=document.getElementById('ir-diagnostico');
+  if(bd) bd.onclick=()=>{ vista={tipo:'diagnostico', id:m.id}; render(); };
   const bc=document.getElementById('compartir');
   if(bc) bc.onclick=()=>{ vista={tipo:'compartir', id:m.id}; render(); };
   const ba=document.getElementById('archivar');
@@ -1840,7 +2080,7 @@ function renderCamino(){
         <div class="camino-info">
           ${cabeceraHTML(m,d)}
           ${banner}
-          ${accionesHTML()}
+          ${accionesHTML(m.id)}
         </div>
         <div class="camino-lista">
           <div class="camino">${caminoHTML(m,d)}</div>
@@ -1854,7 +2094,7 @@ function renderCamino(){
       ${cabeceraHTML(m,d)}
       <div class="camino">${caminoHTML(m,d)}</div>
       ${banner}
-      ${accionesHTML()}`;
+      ${accionesHTML(m.id)}`;
   }
   wireMarca();
   wireCamino(m,d);
@@ -1876,7 +2116,7 @@ function pintarContenido(contenidoHTML, wireContenido){
           ${cabeceraHTML(m,d)}
           <div class="camino">${caminoHTML(m,d)}</div>
           ${repasoLibre?`<div class="banner-repaso">🔁 <span><strong>Repaso activo.</strong></span><button id="salir-repaso">Salir</button></div>`:''}
-          ${accionesHTML()}
+          ${accionesHTML(m.id)}
         </div>
         <div class="panel-contenido">${contenidoHTML}</div>
       </div>`;
@@ -2083,6 +2323,12 @@ function renderQuiz(){
       const elegida=+btn.dataset.i;
       const bien=elegida===q.correcta;
       if(bien)vista.aciertos++;
+      // registrar el resultado (alimenta el diagnóstico y el repaso espaciado)
+      if(!repasoLibre && vista.tipo==='quiz' && vista.mid){
+        // en el repaso, cada pregunta guarda de qué unidad vino
+        const nidReg = vista.esRepaso ? (q.ui!==undefined ? q.ui+'-r' : '0-r') : vista.nid;
+        if(nidReg) registrarRespuesta(vista.mid, nidReg, q, bien);
+      }
       $app.querySelectorAll('.opcion').forEach(b=>{
         b.disabled=true;
         const i=+b.dataset.i;
@@ -2108,6 +2354,31 @@ function renderResultado(total){
   const pct=Math.round(vista.aciertos/total*100);
   const aprobado=pct>=ex.umbral;
   const nota=Math.max(1,Math.round(pct/10));
+
+  // --- REPASO ESPACIADO: no es un nodo del camino, tiene su propio cierre ---
+  if(vista.esRepaso){
+    const quedan=pendientesDeRepaso(vista.mid).length;
+    const html=`
+      <div class="card resultado">
+        <div class="nota">${vista.aciertos}/${total}</div>
+        <p><strong>Repaso terminado</strong></p>
+        <p class="sub">${vista.aciertos===total
+            ? 'Perfecto. Las que acertaste tres veces seguidas salen de la cola: ya las tenés.'
+            : 'Las que fallaste vuelven mañana. Las que acertaste se alejan en el tiempo.'}
+          ${quedan>0?`<br>Te quedan <strong>${quedan}</strong> pendientes para hoy.`:'<br>No te queda nada más para repasar hoy. 💪'}</p>
+        <div class="acciones-pie">
+          <button class="btn sec" id="volverBtn">Volver al camino</button>
+          ${quedan>0?'<button class="btn" id="seguirRepaso">Seguir repasando</button>':''}
+        </div>
+      </div>`;
+    pintarContenido(html, ()=>{
+      document.getElementById('volverBtn').onclick=()=>{vista={tipo:'diagnostico',id:vista.mid};render();};
+      const sr=document.getElementById('seguirRepaso');
+      if(sr) sr.onclick=()=>iniciarRepaso(vista.mid);
+    });
+    return;
+  }
+
   const html=`
     <div class="card resultado">
       <div class="nota">${vista.aciertos}/${total}</div>
