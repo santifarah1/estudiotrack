@@ -33,7 +33,6 @@
     --tenue:#9BA5B8; --suave:#6E7A8F;
   }
   html[data-tema="oscuro"] body{background:var(--papel)}
-  html[data-tema="oscuro"] .marca .logo{color:#12161F}   /* texto oscuro: va sobre el resaltador amarillo */
   html[data-tema="oscuro"] input,
   html[data-tema="oscuro"] select,
   html[data-tema="oscuro"] textarea{background:#141922;color:var(--tinta);border-color:var(--borde)}
@@ -136,10 +135,11 @@
   .marca .logo{
     font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:22px;
     display:inline-block;padding:0 5px;cursor:pointer;
+    color:var(--tinta);
     background-image:linear-gradient(var(--resaltador), var(--resaltador));
     background-repeat:no-repeat;
-    background-size:100% 12px;
-    background-position:0 88%;
+    background-size:100% 10px;
+    background-position:0 92%;
   }
   .racha{margin-left:auto;font-weight:700;font-size:14px;color:var(--tinta);background:var(--carta);border:1.5px solid var(--borde);border-radius:999px;padding:4px 12px;box-shadow:var(--sombra)}
   .ajustes{background:var(--carta);border:1.5px solid var(--borde);border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:15px;box-shadow:var(--sombra)}
