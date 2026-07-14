@@ -232,6 +232,34 @@
   .diag-u.flojo{border-color:var(--error);background:#FDEDED}
   .diag-u.flojo .du-pct{color:var(--error)}
   .diag-u.vacio{opacity:.6}
+  /* --- explicame esto --- */
+  .punto{position:relative}
+  .punto .exp-btn{opacity:0;transition:opacity .15s;background:none;border:1.5px solid var(--borde);border-radius:8px;font-family:inherit;font-size:11px;font-weight:700;color:#5A6780;padding:3px 8px;cursor:pointer;flex-shrink:0;align-self:flex-start;margin-top:1px;white-space:nowrap}
+  .punto:hover .exp-btn, .punto .exp-btn:focus{opacity:1}
+  @media(hover:none){ .punto .exp-btn{opacity:1} }
+  .punto .exp-btn:hover{background:var(--acento);border-color:var(--acento);color:var(--tinta)}
+  .punto .exp-btn:disabled{opacity:.5;cursor:default}
+  .exp-caja{background:#EEF3FF;border:1.5px solid #C3D4F5;border-radius:12px;padding:13px 15px;margin:8px 0 4px 26px;font-size:14px;line-height:1.6}
+  .exp-caja strong{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#3D5A99;margin-bottom:6px}
+  .exp-caja .ex-mas{margin-top:10px;font-style:italic;color:#41538C}
+  /* --- flashcards --- */
+  .fc-wrap{perspective:1200px;margin-top:16px}
+  .fc{position:relative;width:100%;min-height:230px;cursor:pointer;transform-style:preserve-3d;transition:transform .5s cubic-bezier(.4,.2,.2,1)}
+  .fc.girada{transform:rotateY(180deg)}
+  .fc-cara{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:26px 22px;border-radius:18px;border:1.5px solid var(--borde);box-shadow:var(--sombra)}
+  .fc-frente{background:var(--carta)}
+  .fc-dorso{background:var(--aprobado-claro);border-color:var(--aprobado);transform:rotateY(180deg)}
+  .fc-cara .fc-et{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#8A93A6;margin-bottom:12px}
+  .fc-dorso .fc-et{color:var(--aprobado)}
+  .fc-cara .fc-tx{font-size:17px;line-height:1.5;font-weight:600}
+  .fc-dorso .fc-tx{font-weight:500;font-size:15.5px}
+  .fc-cara .fc-hint{position:absolute;bottom:14px;font-size:11.5px;color:#9AA3B4}
+  .fc-barra{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px}
+  .fc-cont{font-size:13px;color:#5A6780;font-weight:700}
+  .fc-nav{display:flex;gap:8px}
+  .fc-nav button{background:var(--carta);border:1.5px solid var(--borde);border-radius:10px;width:42px;height:42px;font-size:17px;cursor:pointer;font-family:inherit}
+  .fc-nav button:hover{border-color:var(--tinta)}
+  .fc-nav button:disabled{opacity:.35;cursor:default}
   .codigo-box{background:var(--papel);border:1.5px solid var(--borde);border-radius:12px;padding:12px;font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;max-height:120px;overflow-y:auto;color:#5A6780;margin-top:10px}
   .info-cuota{background:#EEF3FF;border:1.5px solid #7FA0E0;border-radius:12px;padding:13px 15px;font-size:13px;margin-top:12px;line-height:1.45}
   .info-cuota strong{display:block;margin-bottom:4px}
@@ -425,6 +453,7 @@ async function exportarMateria(mid){
     nombre:m.nombre,
     fecha:m.fecha,
     objetivo:m.objetivo,
+    estilo:m.estilo||'mc',
     apuntes:apuntesTxt,
     plan:d.plan,
     contenido:d.contenido||{},   // lecciones y quizzes ya generados: el que importa no gasta cuota
@@ -927,6 +956,27 @@ function recortar(txt, max=400000){
 }
 
 /* ---------- prompts ---------- */
+function pExplicar(m, apuntes, tituloNodo, punto){
+  return `Sos un tutor universitario argentino (voseo, directo, sin vueltas). Materia: "${m.nombre}".
+El estudiante está en la lección "${tituloNodo}" y NO ENTENDIÓ este punto:
+
+"${punto}"
+
+Apuntes de la materia (para que uses SU terminología y SUS datos):
+---
+${recortar(apuntes, 40000)}
+---
+
+Explicáselo de OTRA MANERA, más simple. Reglas:
+- Arrancá de cero, como si nunca lo hubiera visto. No repitas la misma frase que no entendió.
+- Usá una analogía o un ejemplo concreto del campo argentino si ayuda.
+- Si hay números, plazos o porcentajes, repetilos: son los que se toman en el examen.
+- Máximo 4 oraciones. Directo al hueso.
+
+Devolvé SOLO este JSON, sin markdown:
+{"explicacion":"...", "tip":"un dato o truco corto para acordarse en el examen"}`;
+}
+
 function pPlan(m, apuntes){
   return `Sos un tutor universitario argentino. Un estudiante rinde "${m.nombre}" el ${m.fecha} y quiere sacarse ${m.objetivo} o más.
 
@@ -977,22 +1027,41 @@ NIVEL DE EXIGENCIA: el estudiante quiere sacarse ${m.objetivo}. ${ex.instruccion
 
 Generá DOS cosas en un solo JSON:
 1) Una lección sobre "${lec.titulo}" (temas: ${lec.temas||unidad.titulo}). ${ex.leccion}
-2) Un BANCO de exactamente 15 preguntas de opción múltiple que evalúen esa MISMA lección. (El estudiante ve 5 por vez; si falla, se le muestran otras 5 distintas. Por eso necesito 15: tres grupos de 5, variadas entre sí, que no se pisen.)
+2) Un BANCO de exactamente 15 preguntas que evalúen esa MISMA lección. (El estudiante ve 5 por vez; si falla, se le muestran otras 5 distintas. Por eso necesito 15: tres grupos de 5, variadas entre sí, que no se pisen.)
+${(()=>{const e=(m&&m.estilo)||'mc';
+  if(e==='abierta') return 'TODAS las 15 son A DESARROLLAR (tipo="abierta"): el estudiante escribe con sus palabras. Para cada una definí los puntos clave que la respuesta DEBE mencionar.';
+  if(e==='mixto') return '9 de opción múltiple (tipo="mc") y 6 a desarrollar (tipo="abierta"). Alterná: en cada grupo de 5 que haya al menos una abierta.';
+  return 'TODAS de opción múltiple (tipo="mc"): 4 opciones plausibles y cortas, UNA correcta, en posición variada.';
+})()}
 
 REGLA DE COHERENCIA: cada pregunta tiene que poder responderse con lo que explicaste en la lección (resumen, puntos clave o ejemplo). Si vas a preguntar por un dato, una excepción o un detalle, ASEGURATE de haberlo incluido antes en la lección. No preguntes cosas del material que la lección no menciona.
 Esto NO significa hacer preguntas fáciles: mantené el nivel de exigencia indicado arriba. Las preguntas pueden exigir razonar, aplicar y distinguir entre conceptos parecidos — pero siempre sobre contenido que la lección efectivamente cubrió.
 VARIEDAD: las 15 tienen que atacar distintos ángulos de la lección (definiciones, aplicaciones, comparaciones, casos, excepciones). Que no haya dos preguntas que sean casi la misma.
 SÉ CONCISO: preguntas y opciones cortas y al hueso, sin relleno. Explicaciones de máximo 15 palabras.
 
-Basate SOLO en los apuntes; si falta algo esencial, completá con conocimiento estándar de la materia. Las preguntas: 4 opciones plausibles y cortas, UNA sola correcta, en posición variada.
+Basate SOLO en los apuntes; si falta algo esencial, completá con conocimiento estándar de la materia.
 
-Respondé SOLO con este JSON:
-{"leccion":{"resumen":"2-3 oraciones con la idea central","puntos":["6 a 8 puntos clave, 1-2 oraciones cada uno. Incluí los datos concretos, excepciones, plazos, porcentajes y distinciones finas que después vas a preguntar en el quiz"],"ejemplo":"un caso típico de examen, 2-4 oraciones"},"quiz":{"preguntas":[{"q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}]}}
-(el array "preguntas" tiene que traer las 15)`;
+Respondé SOLO con este JSON (sin markdown):
+{"leccion":{"resumen":"2-3 oraciones con la idea central","puntos":["6 a 8 puntos clave, 1-2 oraciones cada uno. Incluí los datos concretos, excepciones, plazos, porcentajes y distinciones finas que después vas a preguntar en el quiz"],"ejemplo":"un caso típico de examen, 2-4 oraciones"},
+"quiz":{"preguntas":[
+  {"tipo":"mc","q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}${((m&&m.estilo)||'mc')!=='mc'?`,
+  {"tipo":"abierta","q":"...","clave":["punto que la respuesta DEBE mencionar","otro punto clave"],"modelo":"respuesta ideal en 2-3 oraciones"}`:''}
+]}}
+(el array "preguntas" tiene que traer exactamente 15)`;
+}
+
+// Decide cuántas preguntas abiertas lleva un lote según el estilo de la materia
+function cuantasAbiertas(m, n){
+  const e=(m&&m.estilo)||'mc';
+  if(e==='abierta') return n;              // todas
+  if(e==='mixto') return Math.max(1, Math.round(n*0.4));   // ~40%
+  return 0;                                 // multiple choice puro
 }
 
 function pQuiz(m, apuntes, nodo, esSimulacro, evitar, cuantas){
   const n = cuantas || (esSimulacro ? 10 : 5);
+  const nAb = cuantasAbiertas(m, n);
+  const nMc = n - nAb;
   const alcance = esSimulacro
     ? 'TODO el material, de principio a fin. Recorré los apuntes ENTEROS y repartí las preguntas de forma pareja entre los distintos temas: algunas del principio, otras del medio y otras del final. NO te concentres solo en los primeros temas. Dificultad de examen final.'
     : `"${nodo.titulo}" (temas: ${nodo.temas})`;
@@ -1004,11 +1073,44 @@ ${recortar(apuntes)}
 ---
 NIVEL DE EXIGENCIA: el estudiante quiere sacarse ${m.objetivo}. ${ex.instruccion}
 
-Armá ${n} preguntas de opción múltiple sobre ${alcance} Basate en los apuntes. 4 opciones plausibles y cortas, UNA sola correcta, en posición variada. Explicación breve.
+Armá ${n} preguntas sobre ${alcance} Basate en los apuntes.
+${nAb===0
+  ? `TODAS de opción múltiple: 4 opciones plausibles y cortas, UNA sola correcta, en posición variada. Explicación breve.`
+  : nMc===0
+    ? `TODAS a desarrollar (tipo="abierta"): el estudiante escribe la respuesta con sus palabras. Para cada una definí los puntos clave que una buena respuesta DEBE mencionar.`
+    : `${nMc} de opción múltiple (tipo="mc") y ${nAb} a desarrollar (tipo="abierta"). Poné las abiertas al final.`}
 ${n>=15?'IMPORTANTE: las '+n+' preguntas tienen que ser variadas entre sí, atacando distintos ángulos del tema. No repitas enfoques.':''}
 ${evitar?`\n\n🚫 PROHIBIDO REPETIR: el estudiante YA respondió estas preguntas y las está reintentando. Tenés que generar preguntas TOTALMENTE NUEVAS: otros conceptos, otros ángulos, otros casos del material. No sirve reformular o cambiarle las palabras a estas; tienen que ser preguntas distintas de verdad. Si un tema ya fue preguntado, elegí otro aspecto de ese tema.\n\nPreguntas YA USADAS (no repetir ninguna):\n${evitar.slice(0,2500)}`:''}
-Respondé SOLO con este JSON:
-{"preguntas":[{"q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}]}`;
+Respondé SOLO con este JSON (sin markdown):
+{"preguntas":[
+  {"tipo":"mc","q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}${nAb>0?`,
+  {"tipo":"abierta","q":"...","clave":["punto que la respuesta DEBE mencionar","otro punto clave","otro"],"modelo":"respuesta ideal en 2-3 oraciones"}`:''}
+]}`;
+}
+
+// Prompt para corregir una respuesta abierta
+function pCorregir(m, pregunta, respuesta){
+  return `Sos un profesor universitario argentino corrigiendo un final de "${m.nombre}". Tono directo, honesto pero constructivo (voseo).
+
+PREGUNTA: ${pregunta.q}
+
+PUNTOS CLAVE que la respuesta debería tener:
+${(pregunta.clave||[]).map((c,i)=>`${i+1}. ${c}`).join('\n')}
+
+RESPUESTA IDEAL (referencia): ${pregunta.modelo||''}
+
+RESPUESTA DEL ESTUDIANTE:
+"${respuesta}"
+
+Corregila con criterio de examen universitario:
+- Puntaje de 0 a 10.
+- Fijate si menciona los puntos clave. Si le falta alguno, decilo.
+- Si dice algo INCORRECTO, marcalo: eso resta.
+- No regales nota: si está floja, decilo. Pero reconocé lo que sí está bien.
+- Si es una respuesta vacía, sin sentido, o que no responde a la pregunta, poné 0.
+
+Devolvé SOLO este JSON:
+{"nota":0-10, "bien":["lo que sí acertó"], "falta":["lo que le faltó o está mal"], "veredicto":"1-2 oraciones directas"}`;
 }
 
 /* ---------- lectura de archivos ---------- */
@@ -1243,11 +1345,23 @@ function limpiarPreguntas(preguntas){
   if(!Array.isArray(preguntas)) return [];
   return preguntas.filter(p=>{
     if(!p||typeof p.q!=='string'||!p.q.trim()) return false;
+
+    // pregunta a desarrollar
+    if(p.tipo==='abierta'){
+      if(!Array.isArray(p.clave)) return false;
+      const cl=p.clave.filter(c=>typeof c==='string'&&c.trim());
+      if(cl.length<1) return false;      // necesita al menos un punto clave para corregir
+      p.clave=cl;
+      return true;
+    }
+
+    // multiple choice (por defecto)
     if(!Array.isArray(p.opciones)) return false;
     const ops=p.opciones.filter(o=>typeof o==='string'&&o.trim());
-    if(ops.length<3) return false;                 // al menos 3 opciones válidas
-    if(ops.length!==p.opciones.length) return false; // alguna vino vacía -> descartar
+    if(ops.length<3) return false;
+    if(ops.length!==p.opciones.length) return false;
     if(typeof p.correcta!=='number'||p.correcta<0||p.correcta>=p.opciones.length) return false;
+    p.tipo='mc';
     return true;
   });
 }
@@ -1255,8 +1369,17 @@ function limpiarPreguntas(preguntas){
 function barajar(preguntas){
   const mezcla=[...preguntas].sort(()=>Math.random()-.5);
   return mezcla.map(p=>{
+    // las preguntas a desarrollar no tienen opciones: se devuelven tal cual
+    if(p.tipo==='abierta' || !Array.isArray(p.opciones)){
+      return {...p};
+    }
+    // multiple choice: mezclar el orden de las opciones
     const idx=p.opciones.map((_,i)=>i).sort(()=>Math.random()-.5);
-    return{q:p.q,opciones:idx.map(i=>p.opciones[i]),correcta:idx.indexOf(p.correcta),explicacion:p.explicacion};
+    return {
+      ...p,
+      opciones: idx.map(i=>p.opciones[i]),
+      correcta: idx.indexOf(p.correcta)
+    };
   });
 }
 
@@ -1267,6 +1390,7 @@ function render(){
   const t=vista.tipo;
   if(t==='inicio')renderInicio();
   else if(t==='diagnostico')renderDiagnostico();
+  else if(t==='flashcards')renderFlashcards();
   else if(t==='respaldo')renderRespaldo();
   else if(t==='compartir')renderCompartir();
   else if(t==='importar')renderImportar();
@@ -1490,6 +1614,95 @@ function renderAjustes(err){
       if(!dgBtn) renderAjustes(null);
     }
   };
+}
+
+/* ---------- flashcards ----------
+   Se arman con el contenido YA generado de las lecciones: no gastan cuota. */
+function flashcardsDe(mid){
+  const d=datosMateria(mid);
+  if(!d||!d.plan) return [];
+  const cards=[];
+  const planos=nodosPlanos(d);
+  planos.forEach(n=>{
+    if(n.tipo!=='leccion') return;
+    const c=d.contenido[n.id];
+    if(!c||!c.puntos) return;
+    const ui=n.id.split('-')[0];
+    const unidad=d.plan.unidades[+ui];
+    c.puntos.forEach((p,i)=>{
+      cards.push({
+        frente:n.titulo,
+        dorso:p,
+        unidad:unidad?unidad.titulo:'',
+        uid:n.id+'-'+i
+      });
+    });
+    // el ejemplo también sirve como tarjeta
+    if(c.ejemplo){
+      cards.push({frente:'Caso de examen — '+n.titulo, dorso:c.ejemplo, unidad:unidad?unidad.titulo:'', uid:n.id+'-ej'});
+    }
+  });
+  return cards;
+}
+
+function renderFlashcards(){
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
+  const m=materias.find(x=>x.id===vista.id);
+  const cards=vista.cards||[];
+  if(!m){vista={tipo:'inicio'};render();return;}
+
+  if(!cards.length){
+    $app.innerHTML=`
+      ${marcaHTML()}
+      <button class="volver" id="volver">← Volver al camino</button>
+      <div class="card">
+        <h2>Flashcards</h2>
+        <p class="sub">Todavía no hay tarjetas: se arman con las lecciones que ya generaste. Abrí algunas lecciones del camino y volvé.</p>
+      </div>`;
+    wireMarca();
+    document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:m.id};render();};
+    return;
+  }
+
+  const i=vista.fi||0;
+  const c=cards[i];
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver">← Volver al camino</button>
+    <div class="card">
+      <h2>Flashcards</h2>
+      <p class="sub">${esc(m.nombre)} · tocá la tarjeta para darla vuelta</p>
+
+      <div class="fc-wrap">
+        <div class="fc ${vista.girada?'girada':''}" id="tarjeta">
+          <div class="fc-cara fc-frente">
+            <span class="fc-et">${esc(c.unidad||'Tema')}</span>
+            <span class="fc-tx">${esc(c.frente)}</span>
+            <span class="fc-hint">Tocá para ver el contenido</span>
+          </div>
+          <div class="fc-cara fc-dorso">
+            <span class="fc-et">Contenido</span>
+            <span class="fc-tx">${esc(c.dorso)}</span>
+            <span class="fc-hint">Tocá para volver</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="fc-barra">
+        <span class="fc-cont">${i+1} de ${cards.length}</span>
+        <div class="fc-nav">
+          <button id="fc-prev" ${i===0?'disabled':''}>←</button>
+          <button id="fc-mez" title="Mezclar">🔀</button>
+          <button id="fc-next" ${i===cards.length-1?'disabled':''}>→</button>
+        </div>
+      </div>
+    </div>`;
+  wireMarca();
+  document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:m.id};render();};
+  document.getElementById('tarjeta').onclick=()=>{vista.girada=!vista.girada;render();};
+  document.getElementById('fc-prev').onclick=()=>{if((vista.fi||0)>0){vista.fi=(vista.fi||0)-1;vista.girada=false;render();}};
+  document.getElementById('fc-next').onclick=()=>{if((vista.fi||0)<cards.length-1){vista.fi=(vista.fi||0)+1;vista.girada=false;render();}};
+  document.getElementById('fc-mez').onclick=()=>{vista.cards=barajar(cards);vista.fi=0;vista.girada=false;render();};
 }
 
 /* ---------- listo para rendir (diagnóstico) ---------- */
@@ -1858,6 +2071,14 @@ function renderNueva(err){
           </select>
         </div>
       </div>
+      <label for="estilo">Estilo de preguntas</label>
+      <select id="estilo">
+        <option value="mc" selected>Multiple choice · elegir la correcta</option>
+        <option value="abierta">A desarrollar · escribís y la IA corrige</option>
+        <option value="mixto">Mixto · las dos cosas</option>
+      </select>
+      <p class="hint">Las preguntas a desarrollar se parecen más a un final oral o escrito: escribís tu respuesta y la IA te dice qué te faltó.</p>
+
       <label>Tus apuntes</label>
       <div class="dropzone" id="dz">
         <strong>Subí tus resúmenes</strong> — PDF, Word, PowerPoint, texto o fotos de apuntes<br>
@@ -1896,7 +2117,8 @@ function renderNueva(err){
 
     vista={tipo:'generando',msg:'Leyendo tus apuntes y armando el plan…'};render();
     try{
-      const m={id:'m'+Date.now(),nombre,fecha,objetivo};
+      const estilo=(document.getElementById('estilo')||{}).value||'mc';
+      const m={id:'m'+Date.now(),nombre,fecha,objetivo,estilo};
       let plan=null;
       for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
         const p=await iaJSON(pPlan(m,apuntes),6144,true);
@@ -2002,6 +2224,7 @@ function accionesHTML(mid){
     <button class="btn sec" id="ir-diagnostico" style="margin-top:16px">
       🎯 ¿Listo para rendir?${pend>0?` · ${pend} para repasar`:''}
     </button>
+    <button class="btn sec" id="ir-flashcards" style="margin-top:10px">🃏 Flashcards</button>
     <div class="acciones-pie">
       <button class="btn sec chico ${repasoLibre?'repaso-on':''}" id="repaso">${repasoLibre?'✓ Repaso':'🔁 Modo repaso'}</button>
       <button class="btn sec chico" id="compartir">📤 Compartir</button>
@@ -2028,6 +2251,8 @@ function wireCamino(m,d){
   if(br) br.onclick=()=>{repasoLibre=!repasoLibre;render();};
   const bd=document.getElementById('ir-diagnostico');
   if(bd) bd.onclick=()=>{ vista={tipo:'diagnostico', id:m.id}; render(); };
+  const bf=document.getElementById('ir-flashcards');
+  if(bf) bf.onclick=()=>{ vista={tipo:'flashcards', id:m.id, cards:barajar(flashcardsDe(m.id)), fi:0, girada:false}; render(); };
   const bc=document.getElementById('compartir');
   if(bc) bc.onclick=()=>{ vista={tipo:'compartir', id:m.id}; render(); };
   const ba=document.getElementById('archivar');
@@ -2264,16 +2489,34 @@ async function abrirNodo(mid, nid, forzarNuevo){
 }
 
 /* ---------- lección ---------- */
+function cajaExplicacion(e){
+  if(!e||!e.explicacion) return '';
+  return `<div class="exp-caja">
+    <strong>💡 Explicado de otra forma</strong>
+    ${esc(e.explicacion)}
+    ${e.tip?`<div class="ex-mas">🎯 ${esc(e.tip)}</div>`:''}
+  </div>`;
+}
+
 function renderLeccion(){
   const c=vista.contenido;
   const d=datosMateria(vista.mid);
+  // explicaciones ya pedidas (se guardan: no se vuelve a gastar cuota por el mismo punto)
+  const expls=(d.explicaciones&&d.explicaciones[vista.nid])||{};
   const html=`
     <button class="volver" id="volver">← Volver al camino</button>
     <div class="card contenido">
       <h2>${esc(vista.nodo.titulo)}</h2>
       <p>${esc(c.resumen)}</p>
       <div class="puntos">
-        ${(c.puntos||[]).map(p=>`<div class="punto"><span class="b">›</span><span>${esc(p)}</span></div>`).join('')}
+        ${(c.puntos||[]).map((p,i)=>`
+          <div class="punto">
+            <span class="b">›</span>
+            <span>${esc(p)}</span>
+            <button class="exp-btn" data-i="${i}" title="Explicámelo de otra forma">💡 No entiendo</button>
+          </div>
+          <div id="exp-${i}">${expls[i]?cajaExplicacion(expls[i]):''}</div>
+        `).join('')}
       </div>
       ${c.ejemplo?`<div class="ejemplo"><strong>Caso de examen</strong>${esc(c.ejemplo)}</div>`:''}
       <button class="btn" id="listo">${repasoLibre?'Listo (repaso)':(d.completados[vista.nid]?'Volver al camino':'Entendido, siguiente ✓')}</button>
@@ -2281,6 +2524,41 @@ function renderLeccion(){
   pintarContenido(html, ()=>{
     const bv=document.getElementById('volver');
     if(bv) bv.onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+
+    // --- Explicame esto ---
+    $app.querySelectorAll('.exp-btn').forEach(btn=>{
+      btn.onclick=async ()=>{
+        const i=+btn.dataset.i;
+        const punto=(c.puntos||[])[i];
+        const caja=document.getElementById('exp-'+i);
+        if(!punto||!caja) return;
+
+        if(!hayMotor()){
+          caja.innerHTML=`<div class="exp-caja"><strong>💡 Explicación</strong>Necesitás cargar tu clave de Gemini en Ajustes (⚙️) para pedir explicaciones.</div>`;
+          return;
+        }
+        btn.disabled=true; btn.textContent='Pensando…';
+        caja.innerHTML=`<div class="exp-caja"><strong>💡 Explicación</strong>Buscando otra forma de explicártelo…</div>`;
+        try{
+          const m=materias.find(x=>x.id===vista.mid);
+          const dd=datosMateria(vista.mid);
+          const apuntes=await apuntesDe(dd);
+          const r=await iaJSON(pExplicar(m, apuntes, vista.nodo.titulo, punto), 1024, false, 0.7);
+          const expl={explicacion:r.explicacion||'', tip:r.tip||''};
+          caja.innerHTML=cajaExplicacion(expl);
+          // guardar para no volver a gastar cuota
+          const d2=datosMateria(vista.mid);
+          if(!d2.explicaciones) d2.explicaciones={};
+          if(!d2.explicaciones[vista.nid]) d2.explicaciones[vista.nid]={};
+          d2.explicaciones[vista.nid][i]=expl;
+          guardarMateria(vista.mid,d2);
+          btn.remove();
+        }catch(e){
+          caja.innerHTML=`<div class="exp-caja"><strong>💡 Explicación</strong>${esc(mensajeError(e))}</div>`;
+          btn.disabled=false; btn.textContent='💡 No entiendo';
+        }
+      };
+    });
     document.getElementById('listo').onclick=()=>{
       let esNuevo=false;
       if(!repasoLibre){
@@ -2303,10 +2581,68 @@ function renderQuiz(){
   const total=vista.preguntas.length;
   if(vista.i>=total){renderResultado(total);return;}
   const q=vista.preguntas[vista.i];
+  const cabecera=`<div class="q-num">${nombreTipo(vista.nodo.tipo)} · Pregunta ${vista.i+1} de ${total}${(vista.tandasTotales>1&&vista.nodo.tipo!=='simulacro')?` · serie ${(vista.tandaActual||0)+1}/${vista.tandasTotales}`:''}${q.tipo==='abierta'?' · a desarrollar':''}</div>`;
+
+  // ---- PREGUNTA A DESARROLLAR ----
+  if(q.tipo==='abierta'){
+    const html=`
+      <button class="volver" id="volver">← Volver al camino</button>
+      <div class="card">
+        ${cabecera}
+        <div class="q-texto">${esc(q.q)}</div>
+        <textarea id="resp-abierta" placeholder="Escribí tu respuesta como en un final: explicá con tus palabras, mencioná los conceptos clave…" style="min-height:150px;margin-top:6px"></textarea>
+        <p class="hint">La IA la corrige con criterio de examen: te dice qué acertaste y qué te faltó.</p>
+        <button class="btn" id="corregir">Corregir mi respuesta</button>
+        <div id="feedback"></div>
+      </div>`;
+    pintarContenido(html, ()=>{
+      const bv=document.getElementById('volver');
+      if(bv) bv.onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+      const ta=document.getElementById('resp-abierta');
+      const btn=document.getElementById('corregir');
+      btn.onclick=async ()=>{
+        if(vista.respondida) return;
+        const texto=(ta.value||'').trim();
+        if(texto.length<10){ alert('Escribí una respuesta un poco más desarrollada.'); return; }
+        vista.respondida=true;
+        btn.disabled=true; btn.textContent='Corrigiendo…';
+        ta.disabled=true;
+        try{
+          const m=materias.find(x=>x.id===vista.mid);
+          const r=await iaJSON(pCorregir(m, q, texto), 1024, false, 0.4);
+          const nota=Math.max(0, Math.min(10, Number(r.nota)||0));
+          const bien = nota>=6;                 // aprobada esta pregunta
+          if(bien) vista.aciertos++;
+          if(!repasoLibre && vista.mid){
+            const nidReg = vista.esRepaso ? (q.ui!==undefined ? q.ui+'-r' : '0-r') : vista.nid;
+            if(nidReg) registrarRespuesta(vista.mid, nidReg, q, bien);
+          }
+          document.getElementById('feedback').innerHTML=`
+            <div class="explic ${bien?'bien':'mal'}">
+              <strong>${nota}/10 ${bien?'✓':'✗'}</strong>
+              <div style="margin-bottom:8px">${esc(r.veredicto||'')}</div>
+              ${(r.bien&&r.bien.length)?`<div style="margin-bottom:6px"><strong style="display:inline;font-weight:700">Bien:</strong> ${esc(r.bien.join('. '))}</div>`:''}
+              ${(r.falta&&r.falta.length)?`<div><strong style="display:inline;font-weight:700">Te faltó:</strong> ${esc(r.falta.join('. '))}</div>`:''}
+              ${q.modelo?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,.08)"><strong style="display:inline;font-weight:700">Respuesta modelo:</strong> ${esc(q.modelo)}</div>`:''}
+            </div>
+            <button class="btn" id="sig">${vista.i+1<total?'Siguiente pregunta':'Ver resultado'}</button>`;
+          document.getElementById('sig').onclick=()=>{vista.i++;vista.respondida=false;render();};
+        }catch(e){
+          vista.respondida=false;
+          btn.disabled=false; btn.textContent='Corregir mi respuesta';
+          ta.disabled=false;
+          document.getElementById('feedback').innerHTML=`<div class="err">${esc(mensajeError(e))}</div>`;
+        }
+      };
+    });
+    return;
+  }
+
+  // ---- MULTIPLE CHOICE ----
   const html=`
     <button class="volver" id="volver">← Volver al camino</button>
     <div class="card">
-      <div class="q-num">${nombreTipo(vista.nodo.tipo)} · Pregunta ${vista.i+1} de ${total}${(vista.tandasTotales>1&&vista.nodo.tipo!=='simulacro')?` · serie ${(vista.tandaActual||0)+1}/${vista.tandasTotales}`:''}</div>
+      ${cabecera}
       <div class="q-texto">${esc(q.q)}</div>
       <div id="ops">
         ${q.opciones.map((o,i)=>`<button class="opcion" data-i="${i}">${esc(o)}</button>`).join('')}
