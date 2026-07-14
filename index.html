@@ -499,6 +499,33 @@ async function apuntesDe(datos){
   return await descomprimirTexto(datos.apuntes);
 }
 
+/* ---------- migración: limpiar explicaciones con formato viejo ----------
+   Antes se guardaban por posición del punto (0,1,2...). Si la lección se
+   regeneraba, quedaban pegadas a un texto que no correspondía.
+   Ahora se indexan por el texto del punto. Las viejas se descartan. */
+function migrarExplicaciones(){
+  if(st.get('et:mig-expl')==='1') return;
+  try{
+    const ms=J.get('et:materias',[]);
+    ms.forEach(m=>{
+      const d=J.get('et:m:'+m.id,null);
+      if(!d||!d.explicaciones) return;
+      let cambio=false;
+      Object.keys(d.explicaciones).forEach(nid=>{
+        const porNodo=d.explicaciones[nid]||{};
+        // si alguna clave es un número, es el formato viejo: descartar el nodo entero
+        if(Object.keys(porNodo).some(k=>/^\d+$/.test(k))){
+          delete d.explicaciones[nid];
+          cambio=true;
+        }
+      });
+      if(cambio) J.set('et:m:'+m.id, d);
+    });
+  }catch(e){}
+  st.set('et:mig-expl','1');
+}
+migrarExplicaciones();
+
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
 let tema = st.get('et:tema') || 'auto';
@@ -2769,7 +2796,8 @@ function archivarMateria(mid){
   const d=datosMateria(mid);
   if(!d) return 0;
   const antes=pesoMateria(mid);
-  d.contenido={};      // el contenido generado es lo que más pesa después de los apuntes
+  d.contenido={};        // el contenido generado es lo que más pesa después de los apuntes
+  d.explicaciones={};    // se regeneran junto con las lecciones
   guardarMateria(mid,d);
   const despues=pesoMateria(mid);
   return Math.max(0, antes-despues);
@@ -2835,6 +2863,8 @@ function wireCamino(m,d){
       // contar la vuelta si la había terminado
       if(estabaCompleta) d2.vueltas=(d2.vueltas||0)+1;
       d2.completados={}; d2.contenido={};
+      d2.explicaciones={};   // la lección se regenera: las explicaciones viejas ya no aplican
+      d2.intentos={};
       // OJO: 'usadas' NO se borra, así el examen final y los quizzes
       // generan preguntas nuevas y no repiten las de la vuelta anterior.
       guardarMateria(m.id,d2);
@@ -3067,7 +3097,8 @@ function cajaExplicacion(e){
 function renderLeccion(){
   const c=vista.contenido;
   const d=datosMateria(vista.mid);
-  // explicaciones ya pedidas (se guardan: no se vuelve a gastar cuota por el mismo punto)
+  // Explicaciones ya pedidas. Se indexan por el TEXTO del punto (no por su posición):
+  // si la lección se regenera con otros puntos, las viejas no se muestran.
   const expls=(d.explicaciones&&d.explicaciones[vista.nid])||{};
   const html=`
     <button class="volver" id="volver">← Volver al camino</button>
@@ -3079,9 +3110,9 @@ function renderLeccion(){
           <div class="punto">
             <span class="b">›</span>
             <span>${esc(p)}</span>
-            <button class="exp-btn" data-i="${i}" title="Explicámelo de otra forma">💡 No entiendo</button>
+            ${expls[normQ(p)]?'':`<button class="exp-btn" data-i="${i}" title="Explicámelo de otra forma">💡 No entiendo</button>`}
           </div>
-          <div id="exp-${i}">${expls[i]?cajaExplicacion(expls[i]):''}</div>
+          <div id="exp-${i}">${expls[normQ(p)]?cajaExplicacion(expls[normQ(p)]):''}</div>
         `).join('')}
       </div>
       ${c.ejemplo?`<div class="ejemplo"><strong>Caso de examen</strong>${esc(c.ejemplo)}</div>`:''}
@@ -3116,7 +3147,7 @@ function renderLeccion(){
           const d2=datosMateria(vista.mid);
           if(!d2.explicaciones) d2.explicaciones={};
           if(!d2.explicaciones[vista.nid]) d2.explicaciones[vista.nid]={};
-          d2.explicaciones[vista.nid][i]=expl;
+          d2.explicaciones[vista.nid][normQ(punto)]=expl;   // clave = texto del punto
           guardarMateria(vista.mid,d2);
           btn.remove();
           chequearLogros({explicacion:true});
