@@ -2065,10 +2065,13 @@ function avisarRacha(){
 function renderEstadisticas(){
   const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
   const hist=J.get('et:hist',{});
-  const record=J.get('et:racha-record',0);
+  const record=Math.max(J.get('et:racha-record',0), racha.dias||0);
 
-  // totales
-  const totalNodos=Object.values(hist).reduce((a,b)=>a+b,0);
+  // Los totales salen de los datos REALES de las materias (no del historial),
+  // así reflejan también lo que estudiaste antes de que existiera el registro diario.
+  const nodosReales=totalNodos();
+  const nodosHist=Object.values(hist).reduce((a,b)=>a+b,0);
+  const totalNodosMostrar=Math.max(nodosReales, nodosHist);
   const diasActivos=Object.keys(hist).length;
 
   // últimos 28 días (4 semanas)
@@ -2102,7 +2105,8 @@ function renderEstadisticas(){
     return {nombre:m.nombre, pct:Math.round(ok/total*100), total};
   }).filter(Boolean).sort((a,b)=>b.pct-a.pct);
 
-  const totalPreg=porMateria.reduce((a,m)=>a+m.total,0);
+  const totalPreg=totalPreguntas();
+  const completas=materiasCompletas();
   const aRepasar=pendientesDeRepaso().length;
 
   $app.innerHTML=`
@@ -2118,12 +2122,12 @@ function renderEstadisticas(){
           <div class="ec-l">racha actual${record>racha.dias?` · récord ${record}`:''}</div>
         </div>
         <div class="est-caja">
-          <div class="ec-n">${totalNodos}</div>
-          <div class="ec-l">nodos completados</div>
+          <div class="ec-n">${totalNodosMostrar}</div>
+          <div class="ec-l">lecciones y quizzes hechos</div>
         </div>
         <div class="est-caja">
-          <div class="ec-n">${diasActivos}</div>
-          <div class="ec-l">días estudiados</div>
+          <div class="ec-n">${completas}</div>
+          <div class="ec-l">materia${completas===1?'':'s'} completa${completas===1?'':'s'}</div>
         </div>
         <div class="est-caja">
           <div class="ec-n">${totalPreg}</div>
@@ -2132,7 +2136,7 @@ function renderEstadisticas(){
       </div>
 
       <h2 style="font-size:19px;margin-top:24px">Últimas 4 semanas</h2>
-      <p class="sub">${estaSem} nodo${estaSem===1?'':'s'} esta semana${semAnt>0?` · ${dif>=0?'+':''}${dif}% vs la anterior`:''}</p>
+      <p class="sub">${estaSem} nodo${estaSem===1?'':'s'} esta semana${semAnt>0?` · ${dif>=0?'+':''}${dif}% vs la anterior`:''}${diasActivos===0?' · el mapa se empieza a llenar desde hoy':''}</p>
       <div class="heat">
         ${celdas.map(c=>`<i data-n="${c.nivel}" title="${c.f}: ${c.n} nodo${c.n===1?'':'s'}"></i>`).join('')}
       </div>
