@@ -33,7 +33,7 @@
     --tenue:#9BA5B8; --suave:#6E7A8F;
   }
   html[data-tema="oscuro"] body{background:var(--papel)}
-  html[data-tema="oscuro"] .marca span{color:#12161F}
+  html[data-tema="oscuro"] .marca .logo{color:#12161F}   /* texto oscuro: va sobre el resaltador amarillo */
   html[data-tema="oscuro"] input,
   html[data-tema="oscuro"] select,
   html[data-tema="oscuro"] textarea{background:#141922;color:var(--tinta);border-color:var(--borde)}
@@ -66,6 +66,8 @@
   .info-cuota.alerta{background:#FFF4E5;border-color:#E8A33D;color:#7A5418}
   html[data-tema="oscuro"] .info-cuota.alerta{background:#2B2416;border-color:#8A6528;color:#E8C48A}
   html[data-tema="oscuro"] .nodo.bloq::before{border-color:#3A4356}
+  html[data-tema="oscuro"] .racha{color:var(--tinta);background:var(--carta)}
+  html[data-tema="oscuro"] .ajustes{background:var(--carta);border-color:var(--borde)}
   html[data-tema="oscuro"] .estado-motor{background:var(--carta);border-color:var(--borde)}
   html[data-tema="oscuro"] .dropzone{border-color:var(--borde)}
   html[data-tema="oscuro"] .archivo{background:var(--carta);border-color:var(--borde)}
@@ -130,9 +132,16 @@
   }
   h1,h2,h3{font-family:'Bricolage Grotesque','Inter',sans-serif}
   .marca{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-  .marca .logo{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:22px;position:relative;display:inline-block;padding:0 4px;cursor:pointer}
-  .marca .logo::before{content:"";position:absolute;left:0;right:0;bottom:2px;height:12px;background:var(--resaltador);z-index:-1;transform:skew(-8deg) rotate(-1deg)}
-  .racha{margin-left:auto;font-weight:700;font-size:14px;background:var(--carta);border:1.5px solid var(--borde);border-radius:999px;padding:4px 12px;box-shadow:var(--sombra)}
+  /* El resaltador va como background del propio texto: nunca lo puede tapar. */
+  .marca .logo{
+    font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:22px;
+    display:inline-block;padding:0 5px;cursor:pointer;
+    background-image:linear-gradient(var(--resaltador), var(--resaltador));
+    background-repeat:no-repeat;
+    background-size:100% 12px;
+    background-position:0 88%;
+  }
+  .racha{margin-left:auto;font-weight:700;font-size:14px;color:var(--tinta);background:var(--carta);border:1.5px solid var(--borde);border-radius:999px;padding:4px 12px;box-shadow:var(--sombra)}
   .ajustes{background:var(--carta);border:1.5px solid var(--borde);border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:15px;box-shadow:var(--sombra)}
   .card{background:var(--carta);border:1.5px solid var(--borde);border-radius:16px;padding:20px;box-shadow:var(--sombra);margin-top:14px}
   .card h2{font-size:26px;font-weight:800;line-height:1.15;margin-bottom:4px}
@@ -596,8 +605,9 @@ async function importarMateria(codigo){
   const p=await decodificar(codigo);
   if(!p||!p.plan||!p.plan.unidades) throw new Error('El código no es válido o está incompleto');
   const id='m'+Date.now();
-  const m={id, nombre:p.nombre||'Materia importada', fecha:p.fecha||new Date().toISOString().slice(0,10), objetivo:p.objetivo||'8+'};
+  const m={id, nombre:p.nombre||'Materia importada', fecha:p.fecha||new Date().toISOString().slice(0,10), objetivo:p.objetivo||'8+', estilo:p.estilo||'mc'};
   materias.push(m);
+  chequearLogros({importada:true});
   J.set('et:materias',materias);
   const apuntesComp=await comprimirTexto(p.apuntes||'');
   guardarMateria(id,{
@@ -775,16 +785,70 @@ function diagnostico(mid){
    LOGROS
    ========================================================= */
 const CATALOGO_LOGROS = [
+  // --- primeros pasos ---
   {id:'primer_paso',   emoji:'🌱', nombre:'Primer paso',      desc:'Completaste tu primer nodo'},
+  {id:'primera_leccion',emoji:'📖',nombre:'A leer',           desc:'Leíste tu primera lección'},
+  {id:'primer_quiz',   emoji:'✏️', nombre:'A rendir',         desc:'Aprobaste tu primer quiz'},
+  {id:'primera_materia',emoji:'🗂️',nombre:'Arrancamos',       desc:'Creaste tu primera materia'},
+
+  // --- precisión ---
   {id:'sin_errores',   emoji:'💯', nombre:'Sin errores',      desc:'Un quiz perfecto, sin fallar ninguna'},
+  {id:'final_perfecto',emoji:'🎯', nombre:'Final perfecto',   desc:'100% en un examen final'},
+  {id:'tres_perfectos',emoji:'🎖️', nombre:'Puntería',         desc:'3 quizzes perfectos'},
+  {id:'diez_perfectos',emoji:'🏆', nombre:'Francotirador',    desc:'10 quizzes perfectos'},
+  {id:'primera_toma',  emoji:'🥇', nombre:'A la primera',     desc:'Aprobaste un quiz sin reintentar'},
+  {id:'remontada',     emoji:'📈', nombre:'Remontada',        desc:'Aprobaste un quiz que antes habías desaprobado'},
+
+  // --- volumen ---
   {id:'maraton',       emoji:'⚡', nombre:'Maratón',          desc:'5 nodos completados en un solo día'},
+  {id:'ultramaraton',  emoji:'🚀', nombre:'Ultramaratón',     desc:'10 nodos en un solo día'},
+  {id:'nodos_25',      emoji:'🧱', nombre:'Ladrillo a ladrillo',desc:'25 nodos completados en total'},
+  {id:'nodos_50',      emoji:'🏗️', nombre:'Constructor',      desc:'50 nodos completados en total'},
+  {id:'nodos_100',     emoji:'🏛️', nombre:'Arquitecto',       desc:'100 nodos completados en total'},
+  {id:'preg_100',      emoji:'🧠', nombre:'Cerebrito',        desc:'100 preguntas respondidas'},
+  {id:'preg_500',      emoji:'🤯', nombre:'Máquina',          desc:'500 preguntas respondidas'},
+
+  // --- constancia ---
   {id:'racha_3',       emoji:'🔥', nombre:'En racha',         desc:'3 días seguidos estudiando'},
   {id:'racha_7',       emoji:'🌋', nombre:'Imparable',        desc:'7 días seguidos estudiando'},
+  {id:'racha_14',      emoji:'☄️', nombre:'Dos semanas',      desc:'14 días seguidos estudiando'},
+  {id:'racha_30',      emoji:'💎', nombre:'Diamante',         desc:'30 días seguidos estudiando'},
+  {id:'meta_cumplida', emoji:'✅', nombre:'Meta del día',     desc:'Cumpliste tu meta diaria'},
+  {id:'meta_7',        emoji:'📅', nombre:'Semana redonda',   desc:'Cumpliste la meta 7 días'},
+  {id:'finde',         emoji:'🛋️', nombre:'Sin fines de semana',desc:'Estudiaste un sábado y un domingo'},
+
+  // --- horarios ---
   {id:'nocturno',      emoji:'🦉', nombre:'Nocturno',         desc:'Estudiaste pasada la medianoche'},
   {id:'madrugador',    emoji:'🐓', nombre:'Madrugador',       desc:'Estudiaste antes de las 7 de la mañana'},
+  {id:'mate_cocido',   emoji:'🧉', nombre:'Con el mate',      desc:'Estudiaste entre las 7 y las 9 de la mañana'},
+  {id:'ultimo_dia',    emoji:'😰', nombre:'Sobre la hora',    desc:'Estudiaste el día del examen'},
+  {id:'anticipado',    emoji:'🗓️', nombre:'Con tiempo',       desc:'Empezaste una materia con más de 20 días'},
+
+  // --- repaso espaciado ---
+  {id:'primer_repaso', emoji:'🔁', nombre:'Volvé cuando quieras',desc:'Hiciste tu primer repaso'},
+  {id:'dominada',      emoji:'🧗', nombre:'Dominada',         desc:'Una pregunta que fallabas te salió 3 veces seguidas'},
+  {id:'cola_vacia',    emoji:'🧹', nombre:'Cola limpia',      desc:'Te pusiste al día: nada pendiente de repaso'},
+  {id:'diez_dominadas',emoji:'🥋', nombre:'Cinturón negro',   desc:'10 preguntas dominadas por repaso'},
+
+  // --- diagnóstico ---
+  {id:'listo_rendir',  emoji:'🎓', nombre:'Listo para rendir',desc:'Una materia entera en verde'},
+  {id:'unidad_100',    emoji:'⭐', nombre:'Unidad perfecta',   desc:'100% de aciertos en una unidad'},
+
+  // --- flashcards y explicaciones ---
+  {id:'flash_50',      emoji:'🃏', nombre:'Barajando',        desc:'Pasaste 50 flashcards'},
+  {id:'preguntón',     emoji:'💡', nombre:'Preguntón',        desc:'Pediste 5 explicaciones distintas'},
+  {id:'desarrollo_10', emoji:'✍️', nombre:'Pluma fina',       desc:'Sacaste 10 en una pregunta a desarrollar'},
+
+  // --- materias ---
   {id:'materia_full',  emoji:'📚', nombre:'Materia completa', desc:'Terminaste el 100% de una materia'},
-  {id:'final_perfecto',emoji:'🎯', nombre:'Final perfecto',   desc:'100% en un examen final'},
   {id:'tres_materias', emoji:'🎓', nombre:'Veterano',         desc:'Completaste 3 materias enteras'},
+  {id:'cinco_materias',emoji:'👨‍🎓', nombre:'Cuatrimestre',    desc:'Completaste 5 materias enteras'},
+  {id:'diez_materias', emoji:'🧑‍🏫', nombre:'Profesor',        desc:'Completaste 10 materias enteras'},
+  {id:'dos_veces',     emoji:'🔂', nombre:'La segunda vuelta',desc:'Reiniciaste y completaste una materia dos veces'},
+
+  // --- social ---
+  {id:'compartir',     emoji:'🤝', nombre:'Buen compañero',   desc:'Compartiste una materia'},
+  {id:'importar',      emoji:'📥', nombre:'Gracias, che',     desc:'Importaste la materia de un compañero'},
 ];
 
 let colaLogros = [];   // logros recién ganados, para mostrar el cartel
@@ -828,27 +892,175 @@ function materiasCompletas(){
   }).length;
 }
 
-// Revisa todas las condiciones. ctx puede traer: {quizPerfecto, esSimulacro}
+// Contadores acumulados (para logros de volumen)
+function contador(k, sumar){
+  const c=J.get('et:cont',{});
+  if(sumar){ c[k]=(c[k]||0)+sumar; J.set('et:cont',c); }
+  return c[k]||0;
+}
+// Total de preguntas respondidas en todas las materias
+function totalPreguntas(){
+  let t=0;
+  materias.forEach(m=>{
+    const d=datosMateria(m.id);
+    if(!d||!d.desempenio) return;
+    Object.values(d.desempenio.porUnidad||{}).forEach(u=>{ t+=(u.ok||0)+(u.mal||0); });
+  });
+  return t;
+}
+// Total de nodos completados en todas las materias
+function totalNodos(){
+  let t=0;
+  materias.forEach(m=>{
+    const d=datosMateria(m.id);
+    if(!d) return;
+    t+=Object.keys(d.completados||{}).length;
+  });
+  return t;
+}
+// ¿Hay alguna materia con TODAS las unidades en verde?
+function hayMateriaEnVerde(){
+  return materias.some(m=>{
+    const dg=diagnostico(m.id);
+    if(!dg||dg.global===null) return false;
+    const conDatos=dg.unidades.filter(u=>!u.sinDatos);
+    if(!conDatos.length || conDatos.length<dg.unidades.length) return false;
+    return conDatos.every(u=>u.pct>=85);
+  });
+}
+// ¿Alguna unidad con 100% de aciertos (y al menos 5 preguntas)?
+function hayUnidad100(){
+  return materias.some(m=>{
+    const d=datosMateria(m.id);
+    if(!d||!d.desempenio) return false;
+    return Object.values(d.desempenio.porUnidad||{}).some(u=>{
+      const total=(u.ok||0)+(u.mal||0);
+      return total>=5 && u.mal===0;
+    });
+  });
+}
+// ¿Queda algo pendiente de repaso en todas las materias?
+function colaRepasoVacia(){
+  const enCola=materias.reduce((a,m)=>{
+    const d=datosMateria(m.id);
+    return a + ((d&&d.desempenio&&d.desempenio.fallos)||[]).length;
+  },0);
+  // solo cuenta si alguna vez hubo preguntas en cola
+  return contador('dominadas')>0 && enCola===0;
+}
+
+// Revisa todas las condiciones.
+// ctx puede traer: {quizPerfecto, esSimulacro, esLeccion, sinReintentos, eraDesaprobado,
+//                   esRepaso, notaAbierta, materiaCreada, compartida, importada, flashcards}
 function chequearLogros(ctx){
   ctx=ctx||{};
   darLogro('primer_paso');
 
-  const h=new Date().getHours();
+  // --- horarios ---
+  const ahora=new Date();
+  const h=ahora.getHours();
+  const dow=ahora.getDay();   // 0=domingo, 6=sábado
   if(h>=0 && h<5) darLogro('nocturno');
   if(h>=5 && h<7) darLogro('madrugador');
+  if(h>=7 && h<9) darLogro('mate_cocido');
 
+  // fines de semana: hay que haber estudiado sábado Y domingo
+  if(dow===6||dow===0){
+    const fs=J.get('et:finde',{});
+    fs[dow===6?'sab':'dom']=true;
+    J.set('et:finde',fs);
+    if(fs.sab && fs.dom) darLogro('finde');
+  }
+
+  // --- primeros pasos ---
+  if(ctx.esLeccion) darLogro('primera_leccion');
+  if(ctx.esQuiz) darLogro('primer_quiz');
+  if(ctx.materiaCreada) darLogro('primera_materia');
+
+  // --- volumen del día ---
   const mh=metaHoy();
   if(mh.hechos>=5) darLogro('maraton');
+  if(mh.hechos>=10) darLogro('ultramaraton');
+  if(mh.hechos>=(metaDiaria.objetivo||2)) darLogro('meta_cumplida');
 
+  // días con la meta cumplida
+  if(mh.hechos===(metaDiaria.objetivo||2)){
+    const dias=contador('metas_ok',1);
+    if(dias>=7) darLogro('meta_7');
+  }
+
+  // --- volumen total ---
+  const nodos=totalNodos();
+  if(nodos>=25) darLogro('nodos_25');
+  if(nodos>=50) darLogro('nodos_50');
+  if(nodos>=100) darLogro('nodos_100');
+
+  const pregs=totalPreguntas();
+  if(pregs>=100) darLogro('preg_100');
+  if(pregs>=500) darLogro('preg_500');
+
+  // --- rachas ---
   if(racha.dias>=3) darLogro('racha_3');
   if(racha.dias>=7) darLogro('racha_7');
+  if(racha.dias>=14) darLogro('racha_14');
+  if(racha.dias>=30) darLogro('racha_30');
 
-  if(ctx.quizPerfecto) darLogro('sin_errores');
+  // --- precisión ---
+  if(ctx.quizPerfecto){
+    darLogro('sin_errores');
+    const p=contador('perfectos',1);
+    if(p>=3) darLogro('tres_perfectos');
+    if(p>=10) darLogro('diez_perfectos');
+  }
   if(ctx.quizPerfecto && ctx.esSimulacro) darLogro('final_perfecto');
+  if(ctx.sinReintentos) darLogro('primera_toma');
+  if(ctx.eraDesaprobado) darLogro('remontada');
 
+  // --- repaso espaciado ---
+  if(ctx.esRepaso) darLogro('primer_repaso');
+  if(ctx.dominadas){
+    const dom=contador('dominadas', ctx.dominadas);
+    darLogro('dominada');
+    if(dom>=10) darLogro('diez_dominadas');
+  }
+  if(colaRepasoVacia()) darLogro('cola_vacia');
+
+  // --- diagnóstico ---
+  if(hayMateriaEnVerde()) darLogro('listo_rendir');
+  if(hayUnidad100()) darLogro('unidad_100');
+
+  // --- flashcards y explicaciones ---
+  if(ctx.flashcards){
+    const f=contador('flashcards', ctx.flashcards);
+    if(f>=50) darLogro('flash_50');
+  }
+  if(ctx.explicacion){
+    const e=contador('explicaciones',1);
+    if(e>=5) darLogro('preguntón');
+  }
+  if(ctx.notaAbierta>=10) darLogro('desarrollo_10');
+
+  // --- materias ---
   const completas=materiasCompletas();
   if(completas>=1) darLogro('materia_full');
   if(completas>=3) darLogro('tres_materias');
+  if(completas>=5) darLogro('cinco_materias');
+  if(completas>=10) darLogro('diez_materias');
+  if(ctx.segundaVuelta) darLogro('dos_veces');
+
+  // --- fechas de examen ---
+  materias.forEach(m=>{
+    const dias=diasRestantes(m.fecha);
+    const d=datosMateria(m.id);
+    if(!d) return;
+    const hechos=Object.keys(d.completados||{}).length;
+    if(dias===0 && hechos>0) darLogro('ultimo_dia');
+  });
+  if(ctx.diasAlCrear!==undefined && ctx.diasAlCrear>20) darLogro('anticipado');
+
+  // --- social ---
+  if(ctx.compartida) darLogro('compartir');
+  if(ctx.importada) darLogro('importar');
 
   if(colaLogros.length) mostrarCartelLogro();
 }
@@ -1588,12 +1800,15 @@ function renderInicio(){
         pendiente=prox?`Seguís en: ${prox.titulo}`:'¡Camino completo! 🎉';
       }
       const dias=diasRestantes(m.fecha);
+      const dm=datosMateria(m.id);
+      const vueltas=(dm&&dm.vueltas)||0;
       return `<button class="materia-item" data-id="${m.id}">
         <div class="nombre">${esc(m.nombre)}</div>
         <div class="datos">
           <span>📅 ${dias===0?'¡Es hoy!':`Faltan ${dias} día${dias===1?'':'s'}`}</span>
           <span>🎯 ${esc(m.objetivo)}</span>
           <span>${esc(pendiente)}</span>
+          ${vueltas>0?`<span>🔂 ${vueltas}ª vuelta</span>`:''}
         </div>
         <div class="mini-barra"><div style="width:${pct}%"></div></div>
       </button>`;
@@ -2029,7 +2244,13 @@ function renderFlashcards(){
   document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:m.id};render();};
   document.getElementById('tarjeta').onclick=()=>{vista.girada=!vista.girada;render();};
   document.getElementById('fc-prev').onclick=()=>{if((vista.fi||0)>0){vista.fi=(vista.fi||0)-1;vista.girada=false;render();}};
-  document.getElementById('fc-next').onclick=()=>{if((vista.fi||0)<cards.length-1){vista.fi=(vista.fi||0)+1;vista.girada=false;render();}};
+  document.getElementById('fc-next').onclick=()=>{
+    if((vista.fi||0)<cards.length-1){
+      vista.fi=(vista.fi||0)+1; vista.girada=false;
+      chequearLogros({flashcards:1});
+      render();
+    }
+  };
   document.getElementById('fc-mez').onclick=()=>{vista.cards=barajar(cards);vista.fi=0;vista.girada=false;render();};
 }
 
@@ -2126,9 +2347,12 @@ function iniciarRepaso(mid){
     alert('No tenés preguntas para repasar ahora. ¡Buen síntoma!');
     return;
   }
+  const d=datosMateria(mid);
+  const enColaAntes=((d&&d.desempenio&&d.desempenio.fallos)||[]).length;
   const preguntas=barajar(pend).slice(0,10);
   vista={tipo:'quiz', mid, nid:'repaso', nodo:{tipo:'repaso', titulo:'Repaso'},
          preguntas, i:0, aciertos:0, respondida:false, esRepaso:true,
+         enColaAntes,
          tandaActual:0, tandasTotales:1};
   render();
 }
@@ -2459,6 +2683,7 @@ function renderNueva(err){
       J.set('et:materias',materias);
       const apuntesComp=await comprimirTexto(recortar(apuntes,500000));
       guardarMateria(m.id,{apuntes:apuntesComp,plan,completados:{},contenido:{},usadas:{}});
+      chequearLogros({materiaCreada:true, diasAlCrear:diasRestantes(fecha)});
       archivosSubidos=[];
       vista={tipo:'camino',id:m.id};render();
     }catch(e){
@@ -2524,7 +2749,7 @@ function cabeceraHTML(m,d){
         <span class="pill obj">🎯 ${esc(m.objetivo)} · aprobás con ${exigencia(m.objetivo).umbral}%</span>
       </div>
       <div class="barra"><div style="width:${pct}%"></div></div>
-      <div class="barra-label">${pct}% del camino recorrido${pct===100?' — ¡a rendir tranquilo! 🎓':''}</div>
+      <div class="barra-label">${pct}% del camino recorrido${pct===100?' — ¡a rendir tranquilo! 🎓':''}${(d.vueltas||0)>0?` · <strong>completada ${d.vueltas} ${d.vueltas===1?'vez':'veces'}</strong> 🔂`:''}</div>
     </div>`;
 }
 
@@ -2582,7 +2807,7 @@ function wireCamino(m,d){
   const bf=document.getElementById('ir-flashcards');
   if(bf) bf.onclick=()=>{ vista={tipo:'flashcards', id:m.id, cards:barajar(flashcardsDe(m.id)), fi:0, girada:false}; render(); };
   const bc=document.getElementById('compartir');
-  if(bc) bc.onclick=()=>{ vista={tipo:'compartir', id:m.id}; render(); };
+  if(bc) bc.onclick=()=>{ vista={tipo:'compartir', id:m.id}; render(); chequearLogros({compartida:true}); };
   const ba=document.getElementById('archivar');
   if(ba) ba.onclick=()=>{
     const kb=Math.round(pesoMateria(m.id)/1024);
@@ -2594,8 +2819,17 @@ function wireCamino(m,d){
   };
   const bre=document.getElementById('reiniciar');
   if(bre) bre.onclick=()=>{
-    if(confirm(`Esto vuelve "${m.nombre}" a 0% para hacerla de nuevo. Se conservan tus apuntes y el plan; los quizzes van a generar preguntas nuevas. ¿Seguimos?`)){
+    const dPrev=datosMateria(m.id);
+    const planosPrev=nodosPlanos(dPrev);
+    const estabaCompleta = planosPrev.length>0 && planosPrev.every(n=>dPrev.completados[n.id]);
+    const vueltas = dPrev.vueltas||0;
+    const msg = estabaCompleta
+      ? `Ya completaste "${m.nombre}"${vueltas>0?` ${vueltas+1} ${vueltas+1===1?'vez':'veces'}`:''}. Reiniciar la vuelve a 0% para hacerla de nuevo, con preguntas nuevas. Se conservan tus apuntes y el plan. ¿Seguimos?`
+      : `Esto vuelve "${m.nombre}" a 0% para hacerla de nuevo. Se conservan tus apuntes y el plan; los quizzes van a generar preguntas nuevas. ¿Seguimos?`;
+    if(confirm(msg)){
       const d2=datosMateria(m.id);
+      // contar la vuelta si la había terminado
+      if(estabaCompleta) d2.vueltas=(d2.vueltas||0)+1;
       d2.completados={}; d2.contenido={};
       // OJO: 'usadas' NO se borra, así el examen final y los quizzes
       // generan preguntas nuevas y no repiten las de la vuelta anterior.
@@ -2881,6 +3115,7 @@ function renderLeccion(){
           d2.explicaciones[vista.nid][i]=expl;
           guardarMateria(vista.mid,d2);
           btn.remove();
+          chequearLogros({explicacion:true});
         }catch(e){
           caja.innerHTML=`<div class="exp-caja"><strong>💡 Explicación</strong>${esc(mensajeError(e))}</div>`;
           btn.disabled=false; btn.textContent='💡 No entiendo';
@@ -2899,7 +3134,7 @@ function renderLeccion(){
         }
       }
       vista={tipo:'camino',id:vista.mid};render();
-      if(esNuevo) chequearLogros();
+      if(esNuevo) chequearLogros({esLeccion:true});
     };
   });
 }
@@ -2941,6 +3176,7 @@ function renderQuiz(){
           const nota=Math.max(0, Math.min(10, Number(r.nota)||0));
           const bien = nota>=6;                 // aprobada esta pregunta
           if(bien) vista.aciertos++;
+          if(nota>=10) chequearLogros({notaAbierta:10});
           if(!repasoLibre && vista.mid){
             const nidReg = vista.esRepaso ? (q.ui!==undefined ? q.ui+'-r' : '0-r') : vista.nid;
             if(nidReg) registrarRespuesta(vista.mid, nidReg, q, bien);
@@ -3022,6 +3258,11 @@ function renderResultado(total){
   // --- REPASO ESPACIADO: no es un nodo del camino, tiene su propio cierre ---
   if(vista.esRepaso){
     const quedan=pendientesDeRepaso(vista.mid).length;
+    // contar cuántas preguntas quedaron dominadas en este repaso
+    const dd=datosMateria(vista.mid);
+    const enColaAhora=((dd&&dd.desempenio&&dd.desempenio.fallos)||[]).length;
+    const dominadas=Math.max(0,(vista.enColaAntes||0)-enColaAhora);
+    chequearLogros({esRepaso:true, dominadas});
     const html=`
       <div class="card resultado">
         <div class="nota">${vista.aciertos}/${total}</div>
@@ -3068,14 +3309,36 @@ function renderResultado(total){
         const d=datosMateria(vista.mid);
         const esNuevo=!d.completados[vista.nid];
         d.completados[vista.nid]=true;
+
+        // ¿es la primera vez que lo intenta? (no había fallos registrados de este nodo)
+        const sinReintentos = esNuevo && (vista.tandaActual||0)===0 && !(d.intentos&&d.intentos[vista.nid]);
+        const eraDesaprobado = !!(d.intentos && d.intentos[vista.nid]);
+
+        // ¿completó la materia entera? (para el logro de segunda vuelta)
+        const planos=nodosPlanos(d);
+        const completaAhora = planos.length>0 && planos.every(n=>d.completados[n.id]);
+        const segundaVuelta = completaAhora && (d.vueltas||0)>=1;
+
         guardarMateria(vista.mid,d);
         if(esNuevo) marcarRacha();
         const perfecto = vista.aciertos===total;
         const esSim = vista.nodo.tipo==='simulacro';
         vista={tipo:'camino',id:vista.mid};render();
-        if(esNuevo) chequearLogros({quizPerfecto:perfecto, esSimulacro:esSim});
+        if(esNuevo) chequearLogros({
+          quizPerfecto:perfecto, esSimulacro:esSim, esQuiz:true,
+          sinReintentos, eraDesaprobado, segundaVuelta
+        });
       };
     }else{
+      // desaprobó: registrar el intento fallido (habilita el logro "Remontada")
+      if(!repasoLibre && vista.nid){
+        const dd=datosMateria(vista.mid);
+        if(dd){
+          if(!dd.intentos) dd.intentos={};
+          dd.intentos[vista.nid]=(dd.intentos[vista.nid]||0)+1;
+          guardarMateria(vista.mid,dd);
+        }
+      }
       document.getElementById('volverBtn').onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
       document.getElementById('reint').onclick=()=>abrirNodo(vista.mid,vista.nid,true);
     }
