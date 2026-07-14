@@ -2,7 +2,7 @@
    Cachea la app para que abra al instante y la interfaz ande sin conexión.
    (Las llamadas a la IA sí necesitan internet; el resto queda cacheado.) */
 
-const CACHE = 'estudiotrack-v1';
+const CACHE = 'estudiotrack-v2';
 const ARCHIVOS = [
   './',
   './index.html',
@@ -11,14 +11,22 @@ const ARCHIVOS = [
   './icon-512.png'
 ];
 
-// instalar: guardar los archivos base
+// instalar: guardar los archivos base.
+// NO usamos skipWaiting acá: esperamos a que el usuario acepte actualizar.
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(ARCHIVOS)).then(() => self.skipWaiting())
+    caches.open(CACHE).then((c) => c.addAll(ARCHIVOS))
   );
 });
 
-// activar: limpiar caches viejos
+// el usuario tocó "Actualizar" en el banner: activar esta versión ya mismo
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.tipo === 'ACTIVAR_YA') {
+    self.skipWaiting();
+  }
+});
+
+// activar: limpiar caches viejos y tomar control
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((claves) =>
@@ -32,7 +40,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // dejar pasar sin cachear: llamadas a la IA, al worker y a CDNs externos
+  // dejar pasar sin cachear: llamadas a la IA y a CDNs externos
   if (url.origin !== self.location.origin) return;
 
   if (e.request.mode === 'navigate') {

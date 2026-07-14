@@ -219,6 +219,8 @@
   .aviso-clave .ac-ico{font-size:22px}
   .aviso-clave .ac-tx{flex:1;font-size:13.5px;line-height:1.4}
   .aviso-clave .ac-fl{font-size:18px;opacity:.6}
+  .banner-update{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:60;display:flex;align-items:center;gap:12px;background:var(--aprobado);color:#fff;border-radius:14px;padding:12px 16px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:460px;width:calc(100% - 32px);font-size:14px}
+  .banner-update button{margin-left:auto;background:#fff;color:var(--aprobado);border:none;border-radius:9px;padding:8px 14px;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;flex-shrink:0}
   .instalar-banner{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:50;display:flex;align-items:center;gap:12px;background:var(--tinta);color:var(--papel);border-radius:14px;padding:12px 16px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:480px;width:calc(100% - 32px);font-size:14px}
   .instalar-banner .ib-ico{font-size:22px}
   .instalar-banner .ib-tx{flex:1;line-height:1.3}
@@ -249,15 +251,93 @@ const $app = document.getElementById('app');
 
 /* ---------- almacenamiento (localStorage + fallback en memoria) ---------- */
 const mem = {};
+let ultimoErrorGuardado = null;   // para avisar si el almacenamiento se llenó
+
 const st = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return mem[k] ?? null; } },
-  set(k,v){ mem[k]=v; try{ localStorage.setItem(k,v); }catch(e){} },
+  set(k,v){
+    mem[k]=v;
+    try{
+      localStorage.setItem(k,v);
+      ultimoErrorGuardado=null;
+      return true;
+    }catch(e){
+      // QuotaExceededError: el navegador se quedó sin espacio.
+      // NO fallar en silencio: el usuario tiene que enterarse o pierde datos.
+      ultimoErrorGuardado = e;
+      avisarSinEspacio();
+      return false;
+    }
+  },
   del(k){ delete mem[k]; try{ localStorage.removeItem(k); }catch(e){} }
 };
 const J = {
   get(k,def){ const v=st.get(k); if(!v) return def; try{ return JSON.parse(v); }catch(e){ return def; } },
-  set(k,obj){ st.set(k, JSON.stringify(obj)); }
+  set(k,obj){ return st.set(k, JSON.stringify(obj)); }
 };
+
+// Cuánto espacio ocupan los datos de la app (en bytes)
+function espacioUsado(){
+  let total=0;
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(k && k.startsWith('et:')){
+        total += k.length + (localStorage.getItem(k)||'').length;
+      }
+    }
+  }catch(e){}
+  return total*2;   // UTF-16: 2 bytes por caracter
+}
+function espacioUsadoMB(){ return espacioUsado()/1048576; }
+
+let avisoEspacioMostrado=false;
+function avisarSinEspacio(){
+  if(avisoEspacioMostrado) return;
+  avisoEspacioMostrado=true;
+  setTimeout(()=>{
+    alert('⚠️ Se llenó el espacio de tu navegador.\n\nNo pude guardar los últimos cambios. Para liberar lugar:\n\n• Borrá alguna materia que ya no uses (Ajustes → o desde la materia)\n• Antes, hacé un respaldo: Ajustes → Pasar mis datos a otro dispositivo\n\nTu progreso actual sigue a salvo, pero lo nuevo no se está guardando.');
+    avisoEspacioMostrado=false;
+  },100);
+}
+
+/* ---------- compresión de apuntes ----------
+   Los apuntes son lo que más pesa en localStorage (~5MB de límite).
+   Con gzip nativo comprimen ~90%: pasás de ~20 materias a cientos.
+   Guardamos {c:true, d:'...'} cuando están comprimidos. */
+async function comprimirTexto(txt){
+  if(!txt) return {c:false, d:''};
+  if(typeof CompressionStream==='undefined') return {c:false, d:txt};
+  try{
+    const datos=new TextEncoder().encode(txt);
+    const cs=new CompressionStream('gzip');
+    const w=cs.writable.getWriter();
+    w.write(datos); w.close();
+    const comp=new Uint8Array(await new Response(cs.readable).arrayBuffer());
+    return {c:true, d:bytesABase64(comp)};
+  }catch(e){
+    return {c:false, d:txt};    // si falla, guardar sin comprimir
+  }
+}
+async function descomprimirTexto(campo){
+  if(!campo) return '';
+  if(typeof campo==='string') return campo;          // formato viejo: texto plano
+  if(!campo.c) return campo.d||'';                   // guardado sin comprimir
+  try{
+    const bytes=base64ABytes(campo.d);
+    const ds=new DecompressionStream('gzip');
+    const w=ds.writable.getWriter();
+    w.write(bytes); w.close();
+    return await new Response(ds.readable).text();
+  }catch(e){
+    return '';
+  }
+}
+// Lee los apuntes de una materia (maneja formato viejo y comprimido)
+async function apuntesDe(datos){
+  if(!datos) return '';
+  return await descomprimirTexto(datos.apuntes);
+}
 
 /* ---------- estado global ---------- */
 let clavePropia = st.get('et:key') || '';
@@ -319,12 +399,13 @@ async function exportarMateria(mid){
   const m=materias.find(x=>x.id===mid);
   const d=datosMateria(mid);
   if(!m||!d) return null;
+  const apuntesTxt=await apuntesDe(d);   // texto plano: el código ya se comprime entero
   return await codificar({
     v:1,
     nombre:m.nombre,
     fecha:m.fecha,
     objetivo:m.objetivo,
-    apuntes:d.apuntes,
+    apuntes:apuntesTxt,
     plan:d.plan,
     contenido:d.contenido||{},   // lecciones y quizzes ya generados: el que importa no gasta cuota
     usadas:d.usadas||{}
@@ -338,8 +419,9 @@ async function importarMateria(codigo){
   const m={id, nombre:p.nombre||'Materia importada', fecha:p.fecha||new Date().toISOString().slice(0,10), objetivo:p.objetivo||'8+'};
   materias.push(m);
   J.set('et:materias',materias);
+  const apuntesComp=await comprimirTexto(p.apuntes||'');
   guardarMateria(id,{
-    apuntes:p.apuntes||'',
+    apuntes:apuntesComp,
     plan:p.plan,
     completados:{},              // el progreso es de cada uno, arranca en cero
     contenido:p.contenido||{},
@@ -488,7 +570,9 @@ function borrarMateria(id){
   materias = materias.filter(m=>m.id!==id);
   J.set('et:materias', materias);
 }
-function hayMotor(){ return !!clavePropia || !!BACKEND_URL; }
+// Cada usuario usa SU propia clave. Sin fallback silencioso al worker compartido:
+// era confuso (consumía cuota ajena sin avisar) y se saturaba entre todos.
+function hayMotor(){ return !!clavePropia; }
 function tieneClavePropia(){ return !!clavePropia; }
 
 /* =========================================================
@@ -580,32 +664,23 @@ async function llamadaConModelos(via, contents, generationConfig){
 
 // capa principal: backend primero, clave propia como plan B, reintento en 429
 async function gemini(contents, generationConfig){
-  const vias=[];
-  if(clavePropia) vias.push('propia');      // la clave del usuario va primero (su cuota es solo suya)
-  if(BACKEND_URL) vias.push('backend');     // el motor compartido queda como respaldo
-  if(!vias.length) throw new Error('SIN_MOTOR');
-
-  let errPropia=null, ultimoErr=null;
-  for(const via of vias){
-    for(let intento=0;intento<2;intento++){
-      try{
-        return await llamadaConModelos(via, contents, generationConfig);
-      }catch(e){
-        ultimoErr=e;
-        if(via==='propia') errPropia=e;     // guardar el error REAL de la clave del usuario
-        if(e.message==='LIMITE'){
-          if(intento===0){ await new Promise(r=>setTimeout(r,5000)); continue; }
-          break;
-        }
-        if(e.message==='CLAVE_INVALIDA'||e.message==='SIN_PERMISO'){ break; }
-        if(intento===0){ await new Promise(r=>setTimeout(r,1200)); continue; }
+  if(!clavePropia) throw new Error('SIN_MOTOR');
+  let ultimoErr=null;
+  for(let intento=0;intento<2;intento++){
+    try{
+      return await llamadaConModelos('propia', contents, generationConfig);
+    }catch(e){
+      ultimoErr=e;
+      if(e.message==='LIMITE'){
+        if(intento===0){ await new Promise(r=>setTimeout(r,5000)); continue; }
         break;
       }
+      if(e.message==='CLAVE_INVALIDA'||e.message==='SIN_PERMISO'||e.message==='LIMITE_DIA'){ break; }
+      if(intento===0){ await new Promise(r=>setTimeout(r,1200)); continue; }
+      break;
     }
   }
-  // Si el usuario tiene clave propia, mostrar SU error (no el del worker compartido),
-  // que es el único que puede accionar.
-  throw (errPropia || ultimoErr);
+  throw ultimoErr;
 }
 
 function parsearJSON(texto){
@@ -672,7 +747,7 @@ function mensajeError(e){
   if(m==='SATURADO') return 'Los servidores de Google están saturados en este momento. No es tu clave: probá de nuevo en un rato.';
   if(m==='CLAVE_INVALIDA') return 'Esa clave no es válida. Fijate de copiarla completa desde aistudio.google.com/apikey (empieza con "AIza" o "AQ.").';
   if(m==='SIN_PERMISO') return 'Tu clave no tiene permiso para usar Gemini. Suele pasar con claves recién creadas: esperá unos minutos, o creá una nueva en aistudio.google.com/apikey.';
-  if(m==='SIN_MOTOR') return 'Todavía no cargaste tu clave gratuita de Gemini. Entrá a Ajustes (⚙️) y seguí los 2 pasos.';
+  if(m==='SIN_MOTOR') return 'Necesitás tu clave gratuita de Gemini para generar contenido nuevo. Entrá a Ajustes (⚙️) y seguí los 3 pasos (2 minutos). Si un compañero te compartió una materia, podés estudiarla sin clave.';
   return m||'Error desconocido';
 }
 
@@ -713,7 +788,7 @@ function fragmentoRelevante(apuntes, unidad, maxChars=18000){
   return elegidos.map(b=>apuntes.slice(b.i,b.i+BLOQUE)).join('\n[...]\n');
 }
 
-function recortar(txt, max=120000){
+function recortar(txt, max=400000){
   txt = sanitizarTexto(txt);
   return txt.length>max ? txt.slice(0,max)+'\n[apuntes recortados]' : txt;
 }
@@ -887,21 +962,36 @@ async function procesarArchivo(file){
   pintarArchivos();
   try{
     const nom=file.name.toLowerCase();
+    // archivo demasiado grande: avisar antes de intentar leerlo
+    if(file.size > 25*1024*1024) throw new Error('El archivo pesa más de 25 MB. Probá comprimirlo o subirlo por partes.');
+
     if(file.type==='application/pdf'||nom.endsWith('.pdf')) item.texto=await extraerPDF(file);
     else if(nom.endsWith('.docx')) item.texto=await extraerDocx(file);
+    else if(nom.endsWith('.doc')) throw new Error('Formato .doc viejo. Abrilo en Word y guardalo como .docx.');
     else if(nom.endsWith('.pptx')) item.texto=await extraerPptx(file);
-    else if(nom.endsWith('.ppt')) throw new Error('Formato .ppt viejo: guardalo como .pptx y volvé a subirlo');
+    else if(nom.endsWith('.ppt')) throw new Error('Formato .ppt viejo. Guardalo como .pptx y volvé a subirlo.');
     else if(file.type.startsWith('image/')){
-      if(!hayMotor()) throw new Error('Falta motor de IA para transcribir fotos');
+      if(!hayMotor()) throw new Error('Para transcribir fotos necesitás cargar tu clave en Ajustes (⚙️).');
       item.texto=await extraerImagen(file);
     }
     else if(file.type.startsWith('text/')||nom.endsWith('.txt')||nom.endsWith('.md')) item.texto=await extraerTextoPlano(file);
-    else throw new Error('Formato no soportado');
-    if(!item.texto||item.texto.length<20) throw new Error('No encontré texto legible');
+    else throw new Error('No puedo leer este tipo de archivo. Subí PDF, Word (.docx), PowerPoint (.pptx), texto o una foto.');
+
+    if(!item.texto || item.texto.trim().length<20){
+      // distinguir el caso más común: PDF escaneado (imagen, sin texto)
+      if(nom.endsWith('.pdf')) throw new Error('Este PDF no tiene texto: parece escaneado o son imágenes. Sacale fotos a las páginas y subilas como imágenes.');
+      if(nom.endsWith('.pptx')) throw new Error('Esta presentación no tiene texto legible: las diapositivas parecen ser imágenes. Subilas como fotos.');
+      throw new Error('No encontré texto legible en el archivo.');
+    }
     item.estado='ok';
   }catch(e){
     item.estado='error';
-    item.msg=e.message==='LIMITE'?'Límite por minuto: reintentá':e.message||'Error al leer';
+    const m=e.message||'';
+    if(m==='LIMITE') item.msg='Gemini te frenó un minuto. Esperá y reintentá.';
+    else if(m==='LIMITE_DIA') item.msg='Se acabó tu cuota de hoy.';
+    else if(m==='SIN_MOTOR') item.msg='Cargá tu clave en Ajustes (⚙️) para transcribir fotos.';
+    else if(m==='SATURADO') item.msg='Google está saturado. Reintentá en un rato.';
+    else item.msg = m || 'No pude leer el archivo.';
   }
   pintarArchivos();
 }
@@ -1196,7 +1286,7 @@ function renderAjustes(err){
     ${marcaHTML()}
     <div class="card">
       <h2>Tu clave de IA (gratis)</h2>
-      <p class="sub">EstudioTrack usa Google Gemini. Cada uno usa su propia clave gratuita: así nadie se queda sin cuota.</p>
+      <p class="sub">EstudioTrack usa Google Gemini. Necesitás tu propia clave (es gratis y tarda 2 minutos): así tenés tu cuota y no la compartís con nadie.</p>
       ${estado}
       <div class="pasos" style="margin-top:18px">
         <div class="paso"><span class="n">1</span><span>Entrá a <strong>aistudio.google.com/apikey</strong> e iniciá sesión con tu cuenta de Google (es gratis, <strong>no pide tarjeta</strong>).</span></div>
@@ -1207,9 +1297,9 @@ function renderAjustes(err){
       <input id="clave" type="password" placeholder="AIza… o AQ.…" value="${esc(clavePropia)}">
       <p class="hint">Se guarda solo en este dispositivo, nadie más la ve. En el plan gratuito, Google puede usar lo que envíes para mejorar sus modelos: no subas nada privado.</p>
       <div class="info-cuota">
-        <strong>📊 Cómo funciona la cuota gratuita</strong>
-        Tu clave tiene un límite de pedidos por día (depende de tu cuenta de Google). La app consume 1 pedido al armar el camino y 1 por cada unidad que abrís, así que rinde bastante. Si se te acaba, se renueva a la madrugada.<br><br>
-        <strong>Truco:</strong> si un compañero ya armó la materia, que te pase el código con "Compartir" — te llega con el contenido hecho y <strong>no gastás nada de tu cuota</strong>.
+        <strong>📊 Cómo funciona la cuota</strong>
+        Tu clave gratuita tiene un límite de pedidos por día. La app consume 1 pedido al armar el camino y 1 por cada unidad que abrís, así que rinde bastante. Si se te acaba, se renueva a la madrugada.<br><br>
+        <strong>Truco:</strong> si un compañero ya armó la materia, que te pase el código con "Compartir" — te llega con el contenido hecho y <strong>no gastás nada de tu cuota</strong>. Podés estudiarla entera sin usar un solo pedido.
       </div>
       <div id="err-clave">${err?`<div class="err">${esc(err)}</div>`:''}</div>
       <button class="btn" id="guardar">Guardar y probar</button>
@@ -1283,6 +1373,17 @@ async function renderRespaldo(err, aviso){
         <strong>📦 Qué se guarda</strong>
         Tus ${nMaterias} materia${nMaterias===1?'':'s'} con el contenido y el progreso, ${nLogros} logro${nLogros===1?'':'s'}, tu racha 🔥 ${racha.dias} y la meta diaria. Podés incluir también tu clave de Gemini para no tener que cargarla de nuevo.
       </div>
+      ${(()=>{
+        const mb=espacioUsadoMB();
+        const pct=Math.min(100, Math.round(mb/5*100));   // ~5MB es el límite típico
+        const lleno=pct>=75;
+        return `<div class="info-cuota" style="${lleno?'background:#FFF4E5;border-color:#E8A33D':''}">
+          <strong>💾 Espacio usado</strong>
+          <div class="barra" style="margin:8px 0 6px"><div style="width:${pct}%;background:${lleno?'#E8A33D':'var(--aprobado)'}"></div></div>
+          ${mb.toFixed(2)} MB de ~5 MB disponibles (${pct}%).
+          ${lleno?'<br><strong>Se está llenando.</strong> Hacé un respaldo y borrá alguna materia vieja para liberar lugar.':''}
+        </div>`;
+      })()}
       <label style="display:flex;align-items:center;gap:8px;margin-top:16px;font-weight:600">
         <input type="checkbox" id="con-clave" checked style="width:auto">
         <span>Incluir mi clave de Gemini</span>
@@ -1572,7 +1673,8 @@ function renderNueva(err){
       if(!plan) throw new Error('La IA armó un plan demasiado corto. Reintentá, o subí apuntes con un poco más de contenido.');
       materias.push(m);
       J.set('et:materias',materias);
-      guardarMateria(m.id,{apuntes:recortar(apuntes,200000),plan,completados:{},contenido:{},usadas:{}});
+      const apuntesComp=await comprimirTexto(recortar(apuntes,500000));
+      guardarMateria(m.id,{apuntes:apuntesComp,plan,completados:{},contenido:{},usadas:{}});
       archivosSubidos=[];
       vista={tipo:'camino',id:m.id};render();
     }catch(e){
@@ -1642,12 +1744,31 @@ function cabeceraHTML(m,d){
     </div>`;
 }
 
+// Libera espacio: borra lecciones y quizzes generados, conserva plan/progreso/apuntes.
+// Si volvés a abrir un nodo, se regenera (gasta cuota, pero recuperás el espacio).
+function pesoMateria(mid){
+  try{
+    const raw=localStorage.getItem('et:m:'+mid)||'';
+    return raw.length*2;   // bytes
+  }catch(e){ return 0; }
+}
+function archivarMateria(mid){
+  const d=datosMateria(mid);
+  if(!d) return 0;
+  const antes=pesoMateria(mid);
+  d.contenido={};      // el contenido generado es lo que más pesa después de los apuntes
+  guardarMateria(mid,d);
+  const despues=pesoMateria(mid);
+  return Math.max(0, antes-despues);
+}
+
 function accionesHTML(){
   return `
     <div class="acciones-pie">
       <button class="btn sec chico ${repasoLibre?'repaso-on':''}" id="repaso">${repasoLibre?'✓ Repaso':'🔁 Modo repaso'}</button>
       <button class="btn sec chico" id="compartir">📤 Compartir</button>
       <button class="btn sec chico" id="reiniciar">↺ Reiniciar</button>
+      <button class="btn sec chico" id="archivar">🗜️ Liberar espacio</button>
       <button class="btn sec chico" id="borrar">🗑 Borrar</button>
     </div>`;
 }
@@ -1669,6 +1790,15 @@ function wireCamino(m,d){
   if(br) br.onclick=()=>{repasoLibre=!repasoLibre;render();};
   const bc=document.getElementById('compartir');
   if(bc) bc.onclick=()=>{ vista={tipo:'compartir', id:m.id}; render(); };
+  const ba=document.getElementById('archivar');
+  if(ba) ba.onclick=()=>{
+    const kb=Math.round(pesoMateria(m.id)/1024);
+    if(confirm(`Liberar espacio de "${m.nombre}" (ocupa ${kb} KB)\n\nSe borran las lecciones y quizzes ya generados, pero se conservan:\n• Tu progreso\n• El plan del camino\n• Tus apuntes\n\nSi volvés a abrir un nodo, se regenera con la IA (gasta cuota).\n\n¿Seguimos?`)){
+      const liberado=archivarMateria(m.id);
+      render();
+      setTimeout(()=>alert(`Listo: liberaste ${Math.round(liberado/1024)} KB.`),100);
+    }
+  };
   const bre=document.getElementById('reiniciar');
   if(bre) bre.onclick=()=>{
     if(confirm(`Esto vuelve "${m.nombre}" a 0% para hacerla de nuevo. Se conservan tus apuntes y el plan; los quizzes van a generar preguntas nuevas. ¿Seguimos?`)){
@@ -1791,6 +1921,7 @@ async function abrirNodo(mid, nid, forzarNuevo){
   const ui=parseInt(nid.split('-')[0],10);
   const unidad=d.plan.unidades[ui];
   const esSimulacro=nodo.tipo==='simulacro';
+  let apuntesTxt=null;   // se descomprimen solo si hace falta generar
 
   // REINTENTO GRATIS: solo para quizzes de unidad (el examen final siempre se regenera entero)
   if(forzarNuevo && nodo.tipo==='quiz' && siguienteTanda(mid,nid)){
@@ -1805,7 +1936,8 @@ async function abrirNodo(mid, nid, forzarNuevo){
       if(esSimulacro){
         // el examen final se genera solo (cubre todos los temas)
         const evitar=d.usadas[nid]||'';
-        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,true,evitar),8192,false,0.85);
+        apuntesTxt = apuntesTxt ?? await apuntesDe(d);
+        const cont=await iaJSON(pQuiz(m,apuntesTxt,nodo,true,evitar),8192,false,0.85);
         let ok=limpiarPreguntas(cont.preguntas);
         ok=quitarRepetidas(ok, evitar);          // el examen final nunca repite
         if(ok.length<6) throw new Error('El examen vino incompleto. Probá de nuevo.');
@@ -1815,7 +1947,8 @@ async function abrirNodo(mid, nid, forzarNuevo){
         // reintento: pedir preguntas NUEVAS a la IA solo si el banco local ya se agotó
         const evitar=d.usadas[nid]||'';
         // Banco agotado: pedir un LOTE NUEVO de preguntas (15, para 3 series más)
-        const cont=await iaJSON(pQuiz(m,d.apuntes,nodo,false,evitar,15),8192,false,0.95);
+        apuntesTxt = apuntesTxt ?? await apuntesDe(d);
+        const cont=await iaJSON(pQuiz(m,apuntesTxt,nodo,false,evitar,15),8192,false,0.95);
         let ok=limpiarPreguntas(cont.preguntas);
         ok=quitarRepetidas(ok, evitar);
         if(ok.length<3) throw new Error('No pude generar preguntas nuevas distintas. Probá de nuevo en un momento.');
@@ -1824,7 +1957,8 @@ async function abrirNodo(mid, nid, forzarNuevo){
         d.contenido[nid]={preguntas:ok, tanda:0};
       }else{
         // UN SOLO PEDIDO genera la lección Y el quiz de toda la unidad (ahorra cuota)
-        const cont=await iaJSON(pUnidad(m,d.apuntes,unidad),16384);
+        apuntesTxt = apuntesTxt ?? await apuntesDe(d);
+        const cont=await iaJSON(pUnidad(m,apuntesTxt,unidad),16384);
         if(!cont.leccion||!cont.quiz) throw new Error('La unidad vino incompleta');
         const banco=limpiarPreguntas(cont.quiz.preguntas);
         if(banco.length<3) throw new Error('La IA devolvió un quiz incompleto. Probá de nuevo.');
@@ -2015,9 +2149,47 @@ function renderResultado(total){
 
 /* ---------- PWA: registrar service worker + botón instalar ---------- */
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js').catch(e=>console.warn('SW no registrado:',e));
+  window.addEventListener('load',async ()=>{
+    try{
+      const reg=await navigator.serviceWorker.register('sw.js');
+      // Detectar cuando hay una versión nueva esperando
+      reg.addEventListener('updatefound',()=>{
+        const nuevo=reg.installing;
+        if(!nuevo) return;
+        nuevo.addEventListener('statechange',()=>{
+          if(nuevo.state==='installed' && navigator.serviceWorker.controller){
+            mostrarAvisoUpdate(reg);
+          }
+        });
+      });
+      // Si ya hay una esperando al cargar
+      if(reg.waiting && navigator.serviceWorker.controller) mostrarAvisoUpdate(reg);
+      // Buscar actualizaciones cada vez que se abre
+      reg.update().catch(()=>{});
+    }catch(e){ console.warn('SW no registrado:',e); }
   });
+  // cuando el SW nuevo toma control, recargar
+  let recargando=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(recargando) return;
+    recargando=true;
+    location.reload();
+  });
+}
+
+function mostrarAvisoUpdate(reg){
+  if(document.getElementById('banner-update')) return;
+  const b=document.createElement('div');
+  b.className='banner-update';
+  b.id='banner-update';
+  b.innerHTML=`<span>✨</span><span>Hay una versión nueva de EstudioTrack.</span>
+    <button id="bu-si">Actualizar</button>`;
+  document.body.appendChild(b);
+  document.getElementById('bu-si').onclick=()=>{
+    b.remove();
+    if(reg.waiting) reg.waiting.postMessage({tipo:'ACTIVAR_YA'});
+    else location.reload();
+  };
 }
 let promptInstalar=null;
 window.addEventListener('beforeinstallprompt',(e)=>{
