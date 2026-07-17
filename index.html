@@ -498,6 +498,26 @@ async function apuntesDe(datos){
   if(!datos) return '';
   return await descomprimirTexto(datos.apuntes);
 }
+// Parciales/exámenes viejos guardados con la materia (referencia de estilo del profe)
+async function parcialesDe(datos){
+  if(!datos || !datos.parciales) return '';
+  try{ return await descomprimirTexto(datos.parciales); }catch(e){ return ''; }
+}
+// Bloque de instrucción para los prompts, solo si hay parciales viejos
+function bloqueParciales(parciales){
+  if(!parciales || !parciales.trim()) return '';
+  return `
+
+EXÁMENES ANTERIORES DE ESTE PROFESOR (referencia de estilo, MUY IMPORTANTE):
+Abajo van parciales o finales que este profesor ya tomó. Usalos para calcar SU forma de evaluar:
+- Qué temas prioriza y cuáles casi no toca.
+- Si pregunta teoría, casos prácticos, cálculos, o una mezcla.
+- El nivel de detalle y cómo redacta las consignas.
+Las preguntas que armes tienen que PARECERSE a las de estos exámenes (mismo estilo y foco), pero SIN copiarlas textuales: son para practicar, no para memorizar la respuesta.
+---
+${recortar(parciales, 100000)}
+---`;
+}
 
 /* ---------- migración: limpiar explicaciones con formato viejo ----------
    Antes se guardaban por posición del punto (0,1,2...). Si la lección se
@@ -615,6 +635,7 @@ async function exportarMateria(mid){
   const d=datosMateria(mid);
   if(!m||!d) return null;
   const apuntesTxt=await apuntesDe(d);   // texto plano: el código ya se comprime entero
+  const parcialesTxt=await parcialesDe(d);
   return await codificar({
     v:1,
     nombre:m.nombre,
@@ -622,6 +643,7 @@ async function exportarMateria(mid){
     objetivo:m.objetivo,
     estilo:m.estilo||'mc',
     apuntes:apuntesTxt,
+    parciales:parcialesTxt||'',   // referencia de estilo del profe
     plan:d.plan,
     contenido:d.contenido||{},   // lecciones y quizzes ya generados: el que importa no gasta cuota
     usadas:d.usadas||{}
@@ -632,18 +654,20 @@ async function importarMateria(codigo){
   const p=await decodificar(codigo);
   if(!p||!p.plan||!p.plan.unidades) throw new Error('El código no es válido o está incompleto');
   const id='m'+Date.now();
-  const m={id, nombre:p.nombre||'Materia importada', fecha:p.fecha||new Date().toISOString().slice(0,10), objetivo:p.objetivo||'8+', estilo:p.estilo||'mc'};
+  const m={id, nombre:p.nombre||'Materia importada', fecha:p.fecha||new Date().toISOString().slice(0,10), objetivo:p.objetivo||'8+', estilo:p.estilo||'mc', tieneParciales:!!(p.parciales&&p.parciales.trim())};
   materias.push(m);
   chequearLogros({importada:true});
   J.set('et:materias',materias);
   const apuntesComp=await comprimirTexto(p.apuntes||'');
-  guardarMateria(id,{
+  const datos={
     apuntes:apuntesComp,
     plan:p.plan,
     completados:{},              // el progreso es de cada uno, arranca en cero
     contenido:p.contenido||{},
     usadas:p.usadas||{}
-  });
+  };
+  if(p.parciales&&p.parciales.trim()) datos.parciales=await comprimirTexto(p.parciales);
+  guardarMateria(id,datos);
   return m;
 }
 
@@ -1093,6 +1117,7 @@ function chequearLogros(ctx){
 }
 let vista = {tipo:'inicio'};
 let archivosSubidos = [];
+let parcialesSubidos = [];   // fotos de parciales/exámenes viejos (referencia de estilo)
 let repasoLibre = false;   // cuando está activo, todos los nodos se desbloquean y no se marca progreso
 
 function datosMateria(id){ return J.get('et:m:'+id, null); }
@@ -1382,7 +1407,7 @@ Respondé SOLO con este JSON:
 {"resumen":"2-3 oraciones con la idea central","puntos":["5 a 7 puntos clave, 1-2 oraciones cada uno, concretos y estudiables"],"ejemplo":"un caso típico de examen resuelto o explicado, 2-4 oraciones"}`;
 }
 // genera lección + quiz de una unidad completa en UN solo pedido (ahorra cuota)
-function pUnidad(m, apuntes, unidad){
+function pUnidad(m, apuntes, unidad, parciales){
   const lec=unidad.nodos.find(n=>n.tipo==='leccion')||{titulo:unidad.titulo,temas:unidad.titulo};
   const qz=unidad.nodos.find(n=>n.tipo==='quiz')||{titulo:unidad.titulo,temas:unidad.titulo};
   const ex=exigencia(m.objetivo);
@@ -1394,7 +1419,7 @@ ${recortar(apuntes)}
 Unidad a preparar: "${unidad.titulo}".
 
 NIVEL DE EXIGENCIA: el estudiante quiere sacarse ${m.objetivo}. ${ex.instruccion}
-
+${bloqueParciales(parciales)}
 Generá DOS cosas en un solo JSON:
 1) Una lección sobre "${lec.titulo}" (temas: ${lec.temas||unidad.titulo}). ${ex.leccion}
 2) Un BANCO de exactamente 15 preguntas que evalúen esa MISMA lección. (El estudiante ve 5 por vez; si falla, se le muestran otras 5 distintas. Por eso necesito 15: tres grupos de 5, variadas entre sí, que no se pisen.)
@@ -1428,7 +1453,7 @@ function cuantasAbiertas(m, n){
   return 0;                                 // multiple choice puro
 }
 
-function pQuiz(m, apuntes, nodo, esSimulacro, evitar, cuantas){
+function pQuiz(m, apuntes, nodo, esSimulacro, evitar, cuantas, parciales){
   const n = cuantas || (esSimulacro ? 10 : 5);
   const nAb = cuantasAbiertas(m, n);
   const nMc = n - nAb;
@@ -1442,8 +1467,8 @@ Apuntes del estudiante:
 ${recortar(apuntes)}
 ---
 NIVEL DE EXIGENCIA: el estudiante quiere sacarse ${m.objetivo}. ${ex.instruccion}
-
-Armá ${n} preguntas sobre ${alcance} Basate en los apuntes.
+${bloqueParciales(parciales)}
+Armá ${n} preguntas sobre ${alcance} Basate en los apuntes.${parciales?' Seguí el estilo de los exámenes anteriores de arriba.':''}
 ${nAb===0
   ? `TODAS de opción múltiple: 4 opciones plausibles y cortas, UNA sola correcta, en posición variada. Explicación breve.`
   : nMc===0
@@ -1561,10 +1586,12 @@ async function extraerImagen(file){
   if(!limpio) throw new Error('No pude leer texto en la foto');
   return limpio;
 }
-async function procesarArchivo(file){
+async function procesarArchivo(file, lista, repintar){
+  lista=lista||archivosSubidos;
+  repintar=repintar||pintarArchivos;
   const item={nombre:file.name,texto:'',estado:'leyendo',msg:''};
-  archivosSubidos.push(item);
-  pintarArchivos();
+  lista.push(item);
+  repintar();
   try{
     const nom=file.name.toLowerCase();
     // archivo demasiado grande: avisar antes de intentar leerlo
@@ -1598,15 +1625,20 @@ async function procesarArchivo(file){
     else if(m==='SATURADO') item.msg='Google está saturado. Reintentá en un rato.';
     else item.msg = m || 'No pude leer el archivo.';
   }
-  pintarArchivos();
+  repintar();
 }
 function textoDeArchivos(){
   return archivosSubidos.filter(a=>a.estado==='ok').map(a=>`--- ${a.nombre} ---\n${a.texto}`).join('\n\n');
 }
-function pintarArchivos(){
-  const cont=document.getElementById('lista-archivos');
+// Texto de los parciales viejos (para pasarle el estilo del profe a la IA)
+function textoDeParciales(){
+  return parcialesSubidos.filter(a=>a.estado==='ok').map(a=>`--- ${a.nombre} ---\n${a.texto}`).join('\n\n');
+}
+// Pinta una lista de archivos en un contenedor. Genérica: sirve para apuntes y parciales.
+function pintarLista(lista, contId, repintar){
+  const cont=document.getElementById(contId);
   if(!cont) return;
-  cont.innerHTML=archivosSubidos.map((a,i)=>`
+  cont.innerHTML=lista.map((a,i)=>`
     <div class="archivo">
       ${a.estado==='ok'?'<span class="ok-a">✓</span>':a.estado==='error'?'<span class="err-a">✗</span>':'<span>⏳</span>'}
       <span>${esc(a.nombre)}</span>
@@ -1616,9 +1648,11 @@ function pintarArchivos(){
       ${a.estado!=='leyendo'?`<button class="quitar" data-i="${i}" aria-label="Quitar">✕</button>`:''}
     </div>`).join('');
   cont.querySelectorAll('.quitar').forEach(b=>{
-    b.onclick=()=>{archivosSubidos.splice(+b.dataset.i,1);pintarArchivos();};
+    b.onclick=()=>{lista.splice(+b.dataset.i,1);repintar();};
   });
 }
+function pintarArchivos(){ pintarLista(archivosSubidos, 'lista-archivos', pintarArchivos); }
+function pintarParciales(){ pintarLista(parcialesSubidos, 'lista-parciales', pintarParciales); }
 
 /* ---------- helpers ---------- */
 function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML;}
@@ -2526,8 +2560,9 @@ async function renderCompartir(){
       </div>
       <p class="hint" style="margin-top:12px">De esta materia ya tenés generado: <strong>${nodosListos} de ${totalNodos}</strong> nodos. Los que falten, tu amigo los va a generar con su propia clave a medida que avance.</p>
       <div class="codigo-box" id="codigo">${esc(codigo)}</div>
-      <p class="hint">${(codigo.length/1000).toFixed(1)}k caracteres</p>
-      <button class="btn" id="copiar">📋 Copiar código</button>
+      <p class="hint">${(codigo.length/1000).toFixed(1)}k caracteres — es largo, por eso conviene compartir directo (abajo) en vez de pegarlo en un mensaje.</p>
+      <button class="btn" id="compartir-nativo" style="display:none">📤 Compartir (WhatsApp, mail…)</button>
+      <button class="btn sec" id="copiar">📋 Copiar código</button>
       <button class="btn sec" id="descargar">💾 Descargar como archivo</button>
     </div>`;
   wireMarca();
@@ -2555,6 +2590,37 @@ async function renderCompartir(){
     a.click();
     URL.revokeObjectURL(a.href);
   };
+
+  // Compartir nativo: usa el menú del sistema (WhatsApp, mail, etc.).
+  // Es lo que mejor funciona en celu/tablet: no depende de descargar archivos.
+  const btnNativo=document.getElementById('compartir-nativo');
+  if(navigator.share && btnNativo){
+    btnNativo.style.display='';
+    btnNativo.onclick=async ()=>{
+      // 1) intentar compartir un archivo (lo mejor: entra completo aunque sea largo)
+      try{
+        const archivo=new File([codigo], `${m.nombre.replace(/[^a-z0-9]/gi,'-').toLowerCase()}.estudiotrack.txt`, {type:'text/plain'});
+        if(navigator.canShare && navigator.canShare({files:[archivo]})){
+          await navigator.share({
+            files:[archivo],
+            title:`EstudioTrack: ${m.nombre}`,
+            text:`Te comparto la materia "${m.nombre}" de EstudioTrack. Abrila en la app con "Importar materia".`
+          });
+          return;
+        }
+      }catch(e){ if(e.name==='AbortError') return; }
+      // 2) si no se puede compartir archivo, compartir el texto directo
+      try{
+        await navigator.share({
+          title:`EstudioTrack: ${m.nombre}`,
+          text:codigo
+        });
+      }catch(e){
+        if(e.name==='AbortError') return;
+        alert('Tu dispositivo no dejó compartir directo. Probá con "Copiar código".');
+      }
+    };
+  }
 }
 
 /* ---------- importar materia ---------- */
@@ -2669,6 +2735,15 @@ function renderNueva(err){
         <input type="file" id="inputArchivos" multiple accept=".pdf,.docx,.pptx,.txt,.md,image/png,image/jpeg,image/webp">
       </div>
       <div class="archivos" id="lista-archivos"></div>
+
+      <label>Parciales o finales viejos (opcional)</label>
+      <div class="dropzone" id="dz-parciales">
+        <strong>¿Conseguiste exámenes anteriores?</strong> — fotos o PDF<br>
+        <span class="hint">La IA ve cómo toma ese profe y arma preguntas parecidas</span>
+        <input type="file" id="inputParciales" multiple accept=".pdf,.docx,.txt,.md,image/png,image/jpeg,image/webp">
+      </div>
+      <div class="archivos" id="lista-parciales"></div>
+
       <label for="extra">¿Algo más? (opcional)</label>
       <textarea id="extra" placeholder="Pegá texto acá, o aclaraciones: qué temas entran, qué pesa más…"></textarea>
       <p class="hint">El objetivo cambia la exigencia real: con 4+ las preguntas van a lo esencial y aprobás con 60%; con 10 son de nivel promoción y necesitás 85%.</p>
@@ -2683,9 +2758,19 @@ function renderNueva(err){
   dz.onclick=()=>inp.click();
   dz.ondragover=e=>{e.preventDefault();dz.classList.add('arrastrando');};
   dz.ondragleave=()=>dz.classList.remove('arrastrando');
-  dz.ondrop=e=>{e.preventDefault();dz.classList.remove('arrastrando');[...e.dataTransfer.files].forEach(procesarArchivo);};
-  inp.onchange=()=>{[...inp.files].forEach(procesarArchivo);inp.value='';};
+  dz.ondrop=e=>{e.preventDefault();dz.classList.remove('arrastrando');[...e.dataTransfer.files].forEach(f=>procesarArchivo(f,archivosSubidos,pintarArchivos));};
+  inp.onchange=()=>{[...inp.files].forEach(f=>procesarArchivo(f,archivosSubidos,pintarArchivos));inp.value='';};
   pintarArchivos();
+
+  // dropzone de parciales viejos
+  const dzP=document.getElementById('dz-parciales');
+  const inpP=document.getElementById('inputParciales');
+  dzP.onclick=()=>inpP.click();
+  dzP.ondragover=e=>{e.preventDefault();dzP.classList.add('arrastrando');};
+  dzP.ondragleave=()=>dzP.classList.remove('arrastrando');
+  dzP.ondrop=e=>{e.preventDefault();dzP.classList.remove('arrastrando');[...e.dataTransfer.files].forEach(f=>procesarArchivo(f,parcialesSubidos,pintarParciales));};
+  inpP.onchange=()=>{[...inpP.files].forEach(f=>procesarArchivo(f,parcialesSubidos,pintarParciales));inpP.value='';};
+  pintarParciales();
   document.getElementById('cancelar').onclick=()=>{vista={tipo:'inicio'};render();};
 
   document.getElementById('crear').onclick=async ()=>{
@@ -2694,14 +2779,15 @@ function renderNueva(err){
     const fecha=document.getElementById('fecha').value;
     const objetivo=document.getElementById('objetivo').value;
     const extra=document.getElementById('extra').value.trim();
-    if(archivosSubidos.some(a=>a.estado==='leyendo')){mostrarErr('Esperá que terminen de leerse los archivos.');return;}
+    if(archivosSubidos.some(a=>a.estado==='leyendo') || parcialesSubidos.some(a=>a.estado==='leyendo')){mostrarErr('Esperá que terminen de leerse los archivos.');return;}
     const apuntes=[textoDeArchivos(),extra].filter(Boolean).join('\n\n');
+    const parciales=textoDeParciales();
     if(!nombre||!fecha||apuntes.length<100){mostrarErr('Completá la materia, la fecha y subí material con contenido (o pegá texto).');return;}
 
     vista={tipo:'generando',msg:'Leyendo tus apuntes y armando el plan…'};render();
     try{
       const estilo=(document.getElementById('estilo')||{}).value||'mc';
-      const m={id:'m'+Date.now(),nombre,fecha,objetivo,estilo};
+      const m={id:'m'+Date.now(),nombre,fecha,objetivo,estilo,tieneParciales:!!parciales};
       let plan=null;
       for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
         const p=await iaJSON(pPlan(m,apuntes),6144,true);
@@ -2713,9 +2799,12 @@ function renderNueva(err){
       materias.push(m);
       J.set('et:materias',materias);
       const apuntesComp=await comprimirTexto(recortar(apuntes,500000));
-      guardarMateria(m.id,{apuntes:apuntesComp,plan,completados:{},contenido:{},usadas:{}});
+      const datos={apuntes:apuntesComp,plan,completados:{},contenido:{},usadas:{}};
+      if(parciales) datos.parciales=await comprimirTexto(recortar(parciales,120000));
+      guardarMateria(m.id,datos);
       chequearLogros({materiaCreada:true, diasAlCrear:diasRestantes(fecha)});
       archivosSubidos=[];
+      parcialesSubidos=[];
       vista={tipo:'camino',id:m.id};render();
     }catch(e){
       renderNueva(mensajeError(e));
@@ -2781,6 +2870,7 @@ function cabeceraHTML(m,d){
       </div>
       <div class="barra"><div style="width:${pct}%"></div></div>
       <div class="barra-label">${pct}% del camino recorrido${pct===100?' — ¡a rendir tranquilo! 🎓':''}${(d.vueltas||0)>0?` · <strong>completada ${d.vueltas} ${d.vueltas===1?'vez':'veces'}</strong> 🔂`:''}</div>
+      ${m.tieneParciales?`<div class="barra-label">📝 Con parciales viejos de referencia — las preguntas siguen el estilo del profe</div>`:''}
     </div>`;
 }
 
@@ -2983,6 +3073,7 @@ async function abrirNodo(mid, nid, forzarNuevo){
   const unidad=d.plan.unidades[ui];
   const esSimulacro=nodo.tipo==='simulacro';
   let apuntesTxt=null;   // se descomprimen solo si hace falta generar
+  let parcialesTxt=null; // parciales viejos (estilo del profe), solo si la materia los tiene
 
   // REINTENTO GRATIS: solo para quizzes de unidad (el examen final siempre se regenera entero)
   if(forzarNuevo && nodo.tipo==='quiz' && siguienteTanda(mid,nid)){
@@ -2998,7 +3089,8 @@ async function abrirNodo(mid, nid, forzarNuevo){
         // el examen final se genera solo (cubre todos los temas)
         const evitar=d.usadas[nid]||'';
         apuntesTxt = apuntesTxt ?? await apuntesDe(d);
-        const cont=await iaJSON(pQuiz(m,apuntesTxt,nodo,true,evitar),8192,false,0.85);
+        parcialesTxt = parcialesTxt ?? await parcialesDe(d);
+        const cont=await iaJSON(pQuiz(m,apuntesTxt,nodo,true,evitar,null,parcialesTxt),8192,false,0.85);
         let ok=limpiarPreguntas(cont.preguntas);
         ok=quitarRepetidas(ok, evitar);          // el examen final nunca repite
         if(ok.length<6) throw new Error('El examen vino incompleto. Probá de nuevo.');
@@ -3009,7 +3101,8 @@ async function abrirNodo(mid, nid, forzarNuevo){
         const evitar=d.usadas[nid]||'';
         // Banco agotado: pedir un LOTE NUEVO de preguntas (15, para 3 series más)
         apuntesTxt = apuntesTxt ?? await apuntesDe(d);
-        const cont=await iaJSON(pQuiz(m,apuntesTxt,nodo,false,evitar,15),8192,false,0.95);
+        parcialesTxt = parcialesTxt ?? await parcialesDe(d);
+        const cont=await iaJSON(pQuiz(m,apuntesTxt,nodo,false,evitar,15,parcialesTxt),8192,false,0.95);
         let ok=limpiarPreguntas(cont.preguntas);
         ok=quitarRepetidas(ok, evitar);
         if(ok.length<3) throw new Error('No pude generar preguntas nuevas distintas. Probá de nuevo en un momento.');
@@ -3019,7 +3112,8 @@ async function abrirNodo(mid, nid, forzarNuevo){
       }else{
         // UN SOLO PEDIDO genera la lección Y el quiz de toda la unidad (ahorra cuota)
         apuntesTxt = apuntesTxt ?? await apuntesDe(d);
-        const cont=await iaJSON(pUnidad(m,apuntesTxt,unidad),16384);
+        parcialesTxt = parcialesTxt ?? await parcialesDe(d);
+        const cont=await iaJSON(pUnidad(m,apuntesTxt,unidad,parcialesTxt),16384);
         if(!cont.leccion||!cont.quiz) throw new Error('La unidad vino incompleta');
         const banco=limpiarPreguntas(cont.quiz.preguntas);
         if(banco.length<3) throw new Error('La IA devolvió un quiz incompleto. Probá de nuevo.');
