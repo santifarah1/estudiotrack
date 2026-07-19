@@ -2,12 +2,13 @@
    Cachea la app para que abra al instante y la interfaz ande sin conexión.
    (Las llamadas a la IA sí necesitan internet; el resto queda cacheado.)
 
-   IMPORTANTE AL PUBLICAR UNA VERSIÓN NUEVA:
-   Cambiá el número de VERSION de abajo. El navegador compara este archivo
-   byte a byte: si no cambia, NUNCA se entera de que hay algo nuevo y la app
-   queda pegada a la versión vieja. */
+   PARA PUBLICAR UNA VERSIÓN NUEVA:
+   NO hace falta tocar este archivo. Cambiá APP_VERSION en index.html.
+   La app registra este SW como 'sw.js?v=APP_VERSION', así que al cambiar
+   esa constante el navegador ve una URL distinta y detecta la actualización. */
 
-const VERSION = '2026-07-19-01';
+// La versión llega en la URL con la que se registra este SW: sw.js?v=2026.07.19
+const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
 const CACHE = 'estudiotrack-' + VERSION;
 
 // El HTML NO va acá: se busca siempre en la red (ver fetch más abajo).

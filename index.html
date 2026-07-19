@@ -546,6 +546,11 @@ function migrarExplicaciones(){
 }
 migrarExplicaciones();
 
+/* Versión de la app. Al cambiarla, el service worker se registra con una URL
+   distinta y el navegador detecta la actualización automáticamente.
+   Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
+const APP_VERSION = '2026.07.19';
+
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
 let tema = st.get('et:tema') || 'auto';
@@ -2029,7 +2034,7 @@ function renderAjustes(err){
         <p class="hint">Te avisa cuando tu racha está por cortarse. Funciona mejor con la app instalada.</p>
       `:''}
       <button class="btn sec" id="buscar-update">🔄 Buscar actualización</button>
-      <p class="hint">Si la app quedó en una versión vieja, tocá acá. <strong>Nunca hace falta desinstalarla</strong>: eso borra tus materias y tu progreso.</p>
+      <p class="hint">Versión ${APP_VERSION}. Si quedó en una versión vieja, tocá acá o cerrá y volvé a abrir la app. <strong>Nunca hace falta desinstalarla</strong>: eso borra tus materias y tu progreso.</p>
       <button class="btn sec" id="ir-respaldo">📦 Pasar mis datos a otro dispositivo</button>
       <button class="btn sec" id="cancelar">Volver</button>
     </div>`;
@@ -3520,7 +3525,7 @@ if('serviceWorker' in navigator){
   let regGlobal=null;
   window.addEventListener('load',async ()=>{
     try{
-      const reg=await navigator.serviceWorker.register('sw.js');
+      const reg=await navigator.serviceWorker.register('sw.js?v='+APP_VERSION);
       regGlobal=reg;
       // Detectar cuando hay una versión nueva esperando
       reg.addEventListener('updatefound',()=>{
