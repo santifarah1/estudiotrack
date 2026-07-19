@@ -1407,7 +1407,7 @@ Respondé SOLO con este JSON:
 {"resumen":"2-3 oraciones con la idea central","puntos":["5 a 7 puntos clave, 1-2 oraciones cada uno, concretos y estudiables"],"ejemplo":"un caso típico de examen resuelto o explicado, 2-4 oraciones"}`;
 }
 // genera lección + quiz de una unidad completa en UN solo pedido (ahorra cuota)
-function pUnidad(m, apuntes, unidad, parciales){
+function pUnidad(m, apuntes, unidad, parciales, evitar, vuelta){
   const lec=unidad.nodos.find(n=>n.tipo==='leccion')||{titulo:unidad.titulo,temas:unidad.titulo};
   const qz=unidad.nodos.find(n=>n.tipo==='quiz')||{titulo:unidad.titulo,temas:unidad.titulo};
   const ex=exigencia(m.objetivo);
@@ -1419,7 +1419,18 @@ ${recortar(apuntes)}
 Unidad a preparar: "${unidad.titulo}".
 
 NIVEL DE EXIGENCIA: el estudiante quiere sacarse ${m.objetivo}. ${ex.instruccion}
-${bloqueParciales(parciales)}
+${bloqueParciales(parciales)}${vuelta>0?`
+
+🔄 SEGUNDA VUELTA (vuelta ${vuelta+1}): el estudiante YA estudió esta unidad y la está repasando de cero.
+- La LECCIÓN tiene que cubrir el tema desde OTRO ÁNGULO: otros ejemplos, otros casos, los detalles y excepciones que la primera vez quedaron en segundo plano. No repitas las mismas explicaciones con otras palabras.
+- Aprovechá para meter el material de los apuntes que la primera vuelta NO se llegó a cubrir.
+- Subí un escalón la profundidad: ya sabe lo básico.`:''}${evitar?`
+
+🚫 PROHIBIDO REPETIR PREGUNTAS: estas ya se las tomaste en vueltas anteriores. Generá preguntas TOTALMENTE NUEVAS, sobre otros conceptos, otros ángulos y otros casos del material. No sirve reformularlas ni cambiarles las palabras.
+
+Preguntas YA USADAS (ninguna puede repetirse):
+${evitar.slice(0,3000)}`:''}
+
 Generá DOS cosas en un solo JSON:
 1) Una lección sobre "${lec.titulo}" (temas: ${lec.temas||unidad.titulo}). ${ex.leccion}
 2) Un BANCO de exactamente 15 preguntas que evalúen esa MISMA lección. (El estudiante ve 5 por vez; si falla, se le muestran otras 5 distintas. Por eso necesito 15: tres grupos de 5, variadas entre sí, que no se pisen.)
@@ -2946,12 +2957,14 @@ function wireCamino(m,d){
     const estabaCompleta = planosPrev.length>0 && planosPrev.every(n=>dPrev.completados[n.id]);
     const vueltas = dPrev.vueltas||0;
     const msg = estabaCompleta
-      ? `Ya completaste "${m.nombre}"${vueltas>0?` ${vueltas+1} ${vueltas+1===1?'vez':'veces'}`:''}. Reiniciar la vuelve a 0% para hacerla de nuevo, con preguntas nuevas. Se conservan tus apuntes y el plan. ¿Seguimos?`
-      : `Esto vuelve "${m.nombre}" a 0% para hacerla de nuevo. Se conservan tus apuntes y el plan; los quizzes van a generar preguntas nuevas. ¿Seguimos?`;
+      ? `Ya completaste "${m.nombre}"${vueltas>0?` ${vueltas+1} ${vueltas+1===1?'vez':'veces'}`:''}.\n\nAl reiniciar, la IA arma TODO de nuevo: lecciones con otros ejemplos y ángulos, y preguntas distintas a las que ya te tomó. Se conservan tus apuntes y el plan.\n\n⚠️ Ojo: regenerar el contenido gasta cuota de tu clave.\n\n¿Seguimos?`
+      : `Esto vuelve "${m.nombre}" a 0% para hacerla de nuevo.\n\nLa IA va a generar lecciones y preguntas NUEVAS (distintas a las que ya viste). Se conservan tus apuntes y el plan.\n\n⚠️ Ojo: regenerar el contenido gasta cuota de tu clave.\n\n¿Seguimos?`;
     if(confirm(msg)){
       const d2=datosMateria(m.id);
-      // contar la vuelta si la había terminado
+      // 'vueltas' cuenta las veces que la COMPLETÓ (para el logro y el cartel)
       if(estabaCompleta) d2.vueltas=(d2.vueltas||0)+1;
+      // 'reinicios' cuenta cualquier reinicio: le dice a la IA que profundice
+      d2.reinicios=(d2.reinicios||0)+1;
       d2.completados={}; d2.contenido={};
       d2.explicaciones={};   // la lección se regenera: las explicaciones viejas ya no aplican
       d2.intentos={};
@@ -3113,9 +3126,13 @@ async function abrirNodo(mid, nid, forzarNuevo){
         // UN SOLO PEDIDO genera la lección Y el quiz de toda la unidad (ahorra cuota)
         apuntesTxt = apuntesTxt ?? await apuntesDe(d);
         parcialesTxt = parcialesTxt ?? await parcialesDe(d);
-        const cont=await iaJSON(pUnidad(m,apuntesTxt,unidad,parcialesTxt),16384);
+        // Preguntas ya tomadas en esta unidad (de vueltas anteriores): no se repiten.
+        const idsQuiz=unidad.nodos.map((n,ni)=>n.tipo==='quiz'?`${ui}-${ni}`:null).filter(Boolean);
+        const yaUsadas=idsQuiz.map(id=>d.usadas[id]||'').filter(Boolean).join(' | ');
+        const cont=await iaJSON(pUnidad(m,apuntesTxt,unidad,parcialesTxt,yaUsadas,d.reinicios||0),16384);
         if(!cont.leccion||!cont.quiz) throw new Error('La unidad vino incompleta');
-        const banco=limpiarPreguntas(cont.quiz.preguntas);
+        let banco=limpiarPreguntas(cont.quiz.preguntas);
+        banco=quitarRepetidas(banco, yaUsadas);   // filtro de seguridad por si la IA repitió igual
         if(banco.length<3) throw new Error('La IA devolvió un quiz incompleto. Probá de nuevo.');
         unidad.nodos.forEach((n,ni)=>{
           const id=`${ui}-${ni}`;
@@ -3123,7 +3140,8 @@ async function abrirNodo(mid, nid, forzarNuevo){
           else if(n.tipo==='quiz'){
             // banco completo (hasta 15). Se sirven de a 5: los reintentos no gastan cuota.
             d.contenido[id]={preguntas:banco, tanda:0};
-            d.usadas[id]=banco.map(p=>p.q).join(' | ');
+            // ACUMULAR el historial (antes se pisaba y por eso repetía en la 2ª vuelta)
+            d.usadas[id]=[(d.usadas[id]||''), banco.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
           }
         });
       }
