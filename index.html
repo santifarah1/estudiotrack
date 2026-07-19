@@ -2028,6 +2028,8 @@ function renderAjustes(err){
         </button>
         <p class="hint">Te avisa cuando tu racha está por cortarse. Funciona mejor con la app instalada.</p>
       `:''}
+      <button class="btn sec" id="buscar-update">🔄 Buscar actualización</button>
+      <p class="hint">Si la app quedó en una versión vieja, tocá acá. <strong>Nunca hace falta desinstalarla</strong>: eso borra tus materias y tu progreso.</p>
       <button class="btn sec" id="ir-respaldo">📦 Pasar mis datos a otro dispositivo</button>
       <button class="btn sec" id="cancelar">Volver</button>
     </div>`;
@@ -2065,6 +2067,27 @@ function renderAjustes(err){
     if(ok){
       try{ new Notification('🔥 ¡Listo!', {body:'Te voy a avisar cuando tu racha esté en juego.', icon:'icon-192.png'}); }catch(e){}
       render();
+    }
+  };
+  const bup=document.getElementById('buscar-update');
+  if(bup) bup.onclick=async ()=>{
+    bup.disabled=true; bup.textContent='Buscando…';
+    try{
+      const reg=await navigator.serviceWorker.getRegistration();
+      if(!reg){ bup.textContent='No disponible acá'; return; }
+      await reg.update();
+      // esperar un momento a que el navegador procese la versión nueva
+      await new Promise(r=>setTimeout(r,1200));
+      if(reg.waiting){
+        bup.textContent='¡Hay una versión nueva!';
+        reg.waiting.postMessage({tipo:'ACTIVAR_YA'});   // se recarga sola
+      }else{
+        bup.textContent='✓ Ya tenés la última';
+        setTimeout(()=>{bup.textContent='🔄 Buscar actualización';bup.disabled=false;},2500);
+      }
+    }catch(e){
+      bup.textContent='No se pudo. Probá recargar la página.';
+      setTimeout(()=>{bup.textContent='🔄 Buscar actualización';bup.disabled=false;},2500);
     }
   };
   const irb=document.getElementById('ir-respaldo');
@@ -3494,9 +3517,11 @@ function renderResultado(total){
 
 /* ---------- PWA: registrar service worker + botón instalar ---------- */
 if('serviceWorker' in navigator){
+  let regGlobal=null;
   window.addEventListener('load',async ()=>{
     try{
       const reg=await navigator.serviceWorker.register('sw.js');
+      regGlobal=reg;
       // Detectar cuando hay una versión nueva esperando
       reg.addEventListener('updatefound',()=>{
         const nuevo=reg.installing;
@@ -3509,10 +3534,23 @@ if('serviceWorker' in navigator){
       });
       // Si ya hay una esperando al cargar
       if(reg.waiting && navigator.serviceWorker.controller) mostrarAvisoUpdate(reg);
-      // Buscar actualizaciones cada vez que se abre
+      // Buscar actualizaciones al abrir
       reg.update().catch(()=>{});
+
+      // ...y cada 30 minutos mientras la app está abierta
+      setInterval(()=>{ reg.update().catch(()=>{}); }, 30*60*1000);
     }catch(e){ console.warn('SW no registrado:',e); }
   });
+
+  // Al volver a la app (cambiar de pestaña, minimizar y volver), buscar versión nueva.
+  // Esto es clave en la PWA del celu, que casi nunca se cierra del todo.
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible' && regGlobal){
+      regGlobal.update().catch(()=>{});
+      if(regGlobal.waiting && navigator.serviceWorker.controller) mostrarAvisoUpdate(regGlobal);
+    }
+  });
+
   // cuando el SW nuevo toma control, recargar
   let recargando=false;
   navigator.serviceWorker.addEventListener('controllerchange',()=>{
