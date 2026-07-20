@@ -542,7 +542,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.20f';
+const APP_VERSION = '2026.07.20g';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -3516,13 +3516,14 @@ function renderLeccion(){
         }
         btn.disabled=true; btn.textContent='Pensando…';
         caja.innerHTML=`<div class="exp-caja"><strong>💡 Explicación</strong>Buscando otra forma de explicártelo…</div>`;
+        let guardada=null;   // visible en el catch: si un reintento falla, hay que restaurarla
         try{
           const m=materias.find(x=>x.id===vista.mid);
           const dd=datosMateria(vista.mid);
           const apuntes=await apuntesDe(dd);
           // ¿Ya hay una explicación guardada para este punto? → este es un reintento.
           // Las guardadas sin 'intento' (versiones viejas) cuentan como intento 1.
-          const guardada=((dd.explicaciones||{})[vista.nid]||{})[normQ(punto)];
+          guardada=((dd.explicaciones||{})[vista.nid]||{})[normQ(punto)]||null;
           const intento=guardada?((guardada.intento||1)+1):1;
           const r=await iaJSON(pExplicar(m, apuntes, vista.nodo.titulo, punto, intento, guardada&&guardada.explicacion), 1024, false, intento>1?0.9:0.7);
           const expl={explicacion:r.explicacion||'', tip:r.tip||'', intento};
@@ -3542,8 +3543,12 @@ function renderLeccion(){
           }
           chequearLogros({explicacion:true});
         }catch(e){
-          caja.innerHTML=`<div class="exp-caja"><strong>💡 Explicación</strong>${esc(mensajeError(e))}</div>`;
-          btn.disabled=false; btn.textContent='💡 No entiendo';
+          // Si era un reintento, restaurar la explicación anterior y avisar abajo;
+          // si era el primer intento, mostrar solo el error.
+          caja.innerHTML=(guardada?cajaExplicacion(guardada):'')
+            +`<div class="exp-caja"><strong>💡 Explicación</strong>${esc(mensajeError(e))}</div>`;
+          btn.disabled=false;
+          btn.textContent=guardada?'🔄 Sigo sin entender':'💡 No entiendo';
         }
       };
     });
