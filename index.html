@@ -542,7 +542,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.20h';
+const APP_VERSION = '2026.07.21a';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1377,6 +1377,44 @@ Devolvé SOLO este JSON, sin markdown:
 {"explicacion":"...", "tip":"un dato o truco corto para acordarse en el examen"}`;
 }
 
+// Prompt para explicar a fondo POR QUÉ la opción elegida está mal (a demanda, tras errar)
+function pPorQue(m, contexto, q, elegida){
+  return `Sos un tutor universitario argentino (voseo, directo, sin retar). Materia: "${m.nombre}".
+En un quiz, el estudiante respondió MAL esta pregunta:
+
+Pregunta: "${q.q}"
+SU respuesta (incorrecta): "${q.opciones[elegida]}"
+La correcta: "${q.opciones[q.correcta]}"
+
+Material de la lección (la respuesta sale de acá):
+---
+${contexto}
+---
+
+Explicale, en este orden:
+1) Por qué SU opción es incorrecta: qué confusión típica la hace tentadora.
+2) Por qué la correcta es la correcta.
+3) Un truco corto para distinguirlas en el examen.
+Máximo 5 oraciones en total, directo al hueso.
+
+Devolvé SOLO este JSON, sin markdown:
+{"porque":"..."}`;
+}
+
+// Busca el contenido de la lección de una unidad (para darle contexto barato a pPorQue
+// sin mandar los apuntes enteros). Devuelve null si no hay (ej: examen final).
+function leccionContexto(d, ui){
+  try{
+    const u=d&&d.plan&&d.plan.unidades&&d.plan.unidades[ui];
+    if(!u) return null;
+    const li=u.nodos.findIndex(n=>n.tipo==='leccion');
+    if(li===-1) return null;
+    const lec=(d.contenido||{})[ui+'-'+li];
+    if(!lec||!lec.puntos) return null;
+    return [lec.resumen||'', ...(lec.puntos||[]), lec.ejemplo?('Caso: '+lec.ejemplo):''].filter(Boolean).join('\n');
+  }catch(e){ return null; }
+}
+
 function pPlan(m, apuntes){
   return `Sos un tutor universitario argentino. Un estudiante rinde "${m.nombre}" el ${m.fecha} y quiere sacarse ${m.objetivo} o más.
 
@@ -1458,14 +1496,14 @@ Cada una de las 15 preguntas TIENE que poder responderse SOLO con lo que escribi
 - Por eso, si el tema tiene datos importantes (fechas, dosis, porcentajes, densidades, variedades, plagas, procesos), METÉLOS EN LA LECCIÓN. La lección puede tener más puntos si el tema lo necesita: es mejor una lección larga y completa que una corta que deja preguntas sin sustento.
 Esto NO significa hacer preguntas fáciles: mantené el nivel de exigencia. Las preguntas pueden exigir razonar, aplicar y comparar — pero siempre sobre algo que la lección efectivamente explicó.
 VARIEDAD: las 15 tienen que atacar distintos ángulos de la lección (definiciones, aplicaciones, comparaciones, casos, excepciones). Que no haya dos preguntas que sean casi la misma.
-SÉ CONCISO: preguntas y opciones cortas y al hueso, sin relleno. Explicaciones de máximo 15 palabras.
+SÉ CONCISO: preguntas y opciones cortas y al hueso, sin relleno. La "explicacion" de cada pregunta tiene que JUSTIFICAR de verdad: por qué la correcta es correcta y, si hay una opción trampa típica, por qué esa NO. 20 a 35 palabras.
 
 Basate SOLO en los apuntes; si falta algo esencial, completá con conocimiento estándar de la materia.
 
 Respondé SOLO con este JSON (sin markdown):
 {"leccion":{"resumen":"2-3 oraciones con la idea central","puntos":["6 a 10 puntos clave (más si el tema es denso), 1-2 oraciones cada uno. Incluí TODOS los datos concretos, excepciones, plazos, porcentajes, dosis, variedades y distinciones que después vas a preguntar en el quiz. Si un dato va a estar en una pregunta, TIENE que estar acá primero"],"ejemplo":"un caso típico de examen, 2-4 oraciones"},
 "quiz":{"preguntas":[
-  {"tipo":"mc","q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}${((m&&m.estilo)||'mc')!=='mc'?`,
+  {"tipo":"mc","q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"por qué la correcta es correcta y por qué la trampa típica no; 20-35 palabras"}${((m&&m.estilo)||'mc')!=='mc'?`,
   {"tipo":"abierta","q":"...","clave":["punto que la respuesta DEBE mencionar","otro punto clave"],"modelo":"respuesta ideal en 2-3 oraciones"}`:''}
 ]}}
 (el array "preguntas" tiene que traer exactamente 15)`;
@@ -1496,7 +1534,7 @@ NIVEL DE EXIGENCIA: el estudiante quiere sacarse ${m.objetivo}. ${ex.instruccion
 ${bloqueParciales(parciales)}
 Armá ${n} preguntas sobre ${alcance} Basate en los apuntes.${parciales?' Seguí el estilo de los exámenes anteriores de arriba.':''}
 ${nAb===0
-  ? `TODAS de opción múltiple: 4 opciones plausibles y cortas, UNA sola correcta, en posición variada. Explicación breve.`
+  ? `TODAS de opción múltiple: 4 opciones plausibles y cortas, UNA sola correcta, en posición variada. En la "explicacion" justificá: por qué la correcta es correcta y por qué la opción trampa no.`
   : nMc===0
     ? `TODAS a desarrollar (tipo="abierta"): el estudiante escribe la respuesta con sus palabras. Para cada una definí los puntos clave que una buena respuesta DEBE mencionar.`
     : `${nMc} de opción múltiple (tipo="mc") y ${nAb} a desarrollar (tipo="abierta"). Poné las abiertas al final.`}
@@ -1504,7 +1542,7 @@ ${n>=15?'IMPORTANTE: las '+n+' preguntas tienen que ser variadas entre sí, atac
 ${evitar?`\n\n🚫 PROHIBIDO REPETIR: el estudiante YA respondió estas preguntas y las está reintentando. Tenés que generar preguntas TOTALMENTE NUEVAS: otros conceptos, otros ángulos, otros casos del material. No sirve reformular o cambiarle las palabras a estas; tienen que ser preguntas distintas de verdad. Si un tema ya fue preguntado, elegí otro aspecto de ese tema.\n\nPreguntas YA USADAS (no repetir ninguna):\n${evitar.slice(0,2500)}`:''}
 Respondé SOLO con este JSON (sin markdown):
 {"preguntas":[
-  {"tipo":"mc","q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}${nAb>0?`,
+  {"tipo":"mc","q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"por qué la correcta es correcta y por qué la trampa típica no; 20-35 palabras"}${nAb>0?`,
   {"tipo":"abierta","q":"...","clave":["punto que la respuesta DEBE mencionar","otro punto clave","otro"],"modelo":"respuesta ideal en 2-3 oraciones"}`:''}
 ]}`;
 }
@@ -3136,7 +3174,7 @@ function archivarMateria(mid){
   if(!d) return 0;
   const antes=pesoMateria(mid);
   d.contenido={};        // el contenido generado es lo que más pesa después de los apuntes
-  d.explicaciones={};    // se regeneran junto con las lecciones
+  d.explicaciones={}; d.explicRtas={};    // se regeneran junto con las lecciones
   guardarMateria(mid,d);
   const despues=pesoMateria(mid);
   return Math.max(0, antes-despues);
@@ -3206,7 +3244,7 @@ function wireCamino(m,d){
       if(!plan || !plan.unidades || !plan.unidades.length) throw new Error('El plan vino vacío. Reintentá.');
       const d2=datosMateria(m.id);
       d2.plan=plan;
-      d2.completados={}; d2.contenido={}; d2.explicaciones={}; d2.intentos={};
+      d2.completados={}; d2.contenido={}; d2.explicaciones={}; d2.explicRtas={}; d2.intentos={};
       d2.usadas={}; d2.desempenio={porUnidad:{}, fallos:[]};
       guardarMateria(m.id, d2);
       vista={tipo:'camino', id:m.id};
@@ -3234,7 +3272,7 @@ function wireCamino(m,d){
       // 'reinicios' cuenta cualquier reinicio: le dice a la IA que profundice
       d2.reinicios=(d2.reinicios||0)+1;
       d2.completados={}; d2.contenido={};
-      d2.explicaciones={};   // la lección se regenera: las explicaciones viejas ya no aplican
+      d2.explicaciones={}; d2.explicRtas={};   // la lección se regenera: las explicaciones viejas ya no aplican
       d2.intentos={};
       // OJO: 'usadas' NO se borra, así el examen final y los quizzes
       // generan preguntas nuevas y no repiten las de la vuelta anterior.
@@ -3671,14 +3709,51 @@ function renderQuiz(){
         if(i===q.correcta)b.classList.add('correcta');
         else if(i===elegida)b.classList.add('mal');
       });
+      // ¿Ya se pidió antes el "por qué" de esta misma pregunta con esta misma opción?
+      // (cacheado: se muestra gratis, sin gastar cuota)
+      const dPq=vista.mid?datosMateria(vista.mid):null;
+      const clavePq=normQ(q.q)+'|'+elegida;
+      const pqCacheada=(!bien && dPq && dPq.explicRtas && dPq.explicRtas[clavePq])||null;
       document.getElementById('feedback').innerHTML=`
         <div class="explic ${bien?'bien':'mal'}">
           <strong>${bien?'¡Bien ahí! ✓':'No era esa ✗'}</strong>
           ${bien?'':`<div style="margin-bottom:6px"><strong style="display:inline;font-weight:700">La correcta era:</strong> ${esc(q.opciones[q.correcta])}</div>`}
           ${esc(q.explicacion||'')}
         </div>
+        ${pqCacheada?`<div class="exp-caja"><strong>🤔 Por qué</strong>${esc(pqCacheada)}</div>`:''}
+        ${(!bien && !pqCacheada && vista.mid && q.opciones)?`<button class="btn sec chico" id="pq" style="margin-top:8px">🤔 ¿Por qué está mal la mía?</button><div id="pq-caja"></div>`:''}
         <button class="btn" id="sig">${vista.i+1<total?'Siguiente pregunta':'Ver resultado'}</button>`;
       document.getElementById('sig').onclick=()=>{vista.i++;vista.respondida=false;render();};
+      const bpq=document.getElementById('pq');
+      if(bpq) bpq.onclick=async ()=>{
+        const cajaPq=document.getElementById('pq-caja');
+        if(!hayMotor()){
+          cajaPq.innerHTML=`<div class="exp-caja">Necesitás cargar tu clave de Gemini en Ajustes (⚙️) para pedir explicaciones.</div>`;
+          return;
+        }
+        bpq.disabled=true; bpq.textContent='Pensando…';
+        try{
+          const m=materias.find(x=>x.id===vista.mid);
+          const dd=datosMateria(vista.mid);
+          // Contexto barato: la lección de la unidad. Si no hay (examen final,
+          // simulacro), caen los apuntes recortados como plan B.
+          const uiCtx=(q.ui!==undefined)?q.ui:parseInt(vista.nid,10);
+          let ctx=leccionContexto(dd, uiCtx);
+          if(!ctx) ctx=recortar(await apuntesDe(dd), 30000);
+          const r=await iaJSON(pPorQue(m, ctx, q, elegida), 512, false, 0.5);
+          const texto=(r.porque||'').trim();
+          if(!texto) throw new Error('Respuesta vacía de la IA');
+          const d2=datosMateria(vista.mid);
+          if(!d2.explicRtas) d2.explicRtas={};
+          d2.explicRtas[clavePq]=texto;
+          guardarMateria(vista.mid,d2);
+          cajaPq.innerHTML=`<div class="exp-caja"><strong>🤔 Por qué</strong>${esc(texto)}</div>`;
+          bpq.remove();
+        }catch(e){
+          cajaPq.innerHTML=`<div class="exp-caja">${esc(mensajeError(e))}</div>`;
+          bpq.disabled=false; bpq.textContent='🤔 ¿Por qué está mal la mía?';
+        }
+      };
     };
   });
   });
