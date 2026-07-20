@@ -549,7 +549,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.19';
+const APP_VERSION = '2026.07.20';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1385,11 +1385,17 @@ Apuntes del estudiante:
 ${recortar(apuntes)}
 ---
 
-IMPORTANTÍSIMO — COBERTURA COMPLETA: el plan tiene que cubrir el material de PRINCIPIO A FIN. Antes de armarlo, recorré TODO el texto de los apuntes, desde el primer tema hasta el último, y hacé una lista mental de todos los temas que aparecen. NO te quedes solo con los primeros temas: los que están al final del material son tan importantes como los del principio. Si el material es largo, agrupá temas afines, pero que NINGÚN tema quede afuera.
+IMPORTANTÍSIMO — COBERTURA COMPLETA: el plan tiene que cubrir el material de PRINCIPIO A FIN. Antes de armarlo, recorré TODO el texto de los apuntes, desde el primer tema hasta el último, y hacé una lista de todos los temas que aparecen. NO te quedes solo con los primeros temas: los que están al final del material son tan importantes como los del principio. NINGÚN tema puede quedar afuera.
 
-Dividí ese material en 4 a 8 unidades temáticas, en orden lógico de estudio, de modo que entre todas cubran el 100% del contenido. Cada unidad temática DEBE tener exactamente 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
+REGLA DE ORO — UNA UNIDAD = UN TEMA COHERENTE:
+Cada unidad tiene que tratar UN solo tema que se pueda explicar bien en una lección. NO metas en la misma unidad temas que en el material van separados o que tienen contenido distinto.
+- MAL: "Maíz y Arroz" (son dos cultivos distintos), "Soja, Maní y Girasol" (tres cultivos), "Algodón y Recursos Forestales" (dos cosas que no tienen nada que ver).
+- BIEN: "Maíz" una unidad, "Arroz" otra, "Soja" otra, "Girasol" otra. Cada cultivo o tema grande, su propia unidad.
+Si dos temas tienen tecnologías, datos o procesos diferentes, van en unidades SEPARADAS. Es mejor tener muchas unidades chicas y enfocadas que pocas unidades que mezclan todo: así la lección cubre bien el tema y las preguntas no se van a cosas que no se explicaron.
 
-Respondé SOLO con este JSON (sin texto antes ni después). Agregá tantas unidades como haga falta para cubrir todo el material (entre 4 y 8, más la Recta final):
+Dividí el material en tantas unidades como haga falta para que cada una sea UN tema bien acotado (típicamente entre 6 y 15, pero si el material lo pide pueden ser más). Ordenalas de forma lógica para estudiar. Cada unidad DEBE tener exactamente 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
+
+Respondé SOLO con este JSON (sin texto antes ni después). Agregá tantas unidades como haga falta para que cada una sea UN tema acotado (normalmente 6 a 15, más la Recta final). Antes mezclabas temas para que entraran pocas unidades: NO lo hagas, preferí más unidades y más chicas:
 {"unidades":[
 {"titulo":"Nombre del tema 1","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Nombre del tema 2","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
@@ -1445,15 +1451,19 @@ ${(()=>{const e=(m&&m.estilo)||'mc';
   return 'TODAS de opción múltiple (tipo="mc"): 4 opciones plausibles y cortas, UNA correcta, en posición variada.';
 })()}
 
-REGLA DE COHERENCIA: cada pregunta tiene que poder responderse con lo que explicaste en la lección (resumen, puntos clave o ejemplo). Si vas a preguntar por un dato, una excepción o un detalle, ASEGURATE de haberlo incluido antes en la lección. No preguntes cosas del material que la lección no menciona.
-Esto NO significa hacer preguntas fáciles: mantené el nivel de exigencia indicado arriba. Las preguntas pueden exigir razonar, aplicar y distinguir entre conceptos parecidos — pero siempre sobre contenido que la lección efectivamente cubrió.
+⛔ REGLA DE COHERENCIA (LA MÁS IMPORTANTE — se rompe seguido, prestá atención):
+Cada una de las 15 preguntas TIENE que poder responderse SOLO con lo que escribiste en la lección de arriba (resumen + puntos + ejemplo). Ni un dato más.
+- Antes de escribir cada pregunta, verificá: "¿la respuesta correcta está explícita en mi lección?". Si no está, TENÉS DOS OPCIONES: (a) agregás ese dato a la lección, o (b) cambiás la pregunta. Nunca dejes una pregunta que dependa de algo que la lección no dice.
+- Es un problema REAL y GRAVE que el estudiante falle por algo que la app nunca le enseñó. Preferí una lección más completa antes que preguntas "colgadas".
+- Por eso, si el tema tiene datos importantes (fechas, dosis, porcentajes, densidades, variedades, plagas, procesos), METÉLOS EN LA LECCIÓN. La lección puede tener más puntos si el tema lo necesita: es mejor una lección larga y completa que una corta que deja preguntas sin sustento.
+Esto NO significa hacer preguntas fáciles: mantené el nivel de exigencia. Las preguntas pueden exigir razonar, aplicar y comparar — pero siempre sobre algo que la lección efectivamente explicó.
 VARIEDAD: las 15 tienen que atacar distintos ángulos de la lección (definiciones, aplicaciones, comparaciones, casos, excepciones). Que no haya dos preguntas que sean casi la misma.
 SÉ CONCISO: preguntas y opciones cortas y al hueso, sin relleno. Explicaciones de máximo 15 palabras.
 
 Basate SOLO en los apuntes; si falta algo esencial, completá con conocimiento estándar de la materia.
 
 Respondé SOLO con este JSON (sin markdown):
-{"leccion":{"resumen":"2-3 oraciones con la idea central","puntos":["6 a 8 puntos clave, 1-2 oraciones cada uno. Incluí los datos concretos, excepciones, plazos, porcentajes y distinciones finas que después vas a preguntar en el quiz"],"ejemplo":"un caso típico de examen, 2-4 oraciones"},
+{"leccion":{"resumen":"2-3 oraciones con la idea central","puntos":["6 a 10 puntos clave (más si el tema es denso), 1-2 oraciones cada uno. Incluí TODOS los datos concretos, excepciones, plazos, porcentajes, dosis, variedades y distinciones que después vas a preguntar en el quiz. Si un dato va a estar en una pregunta, TIENE que estar acá primero"],"ejemplo":"un caso típico de examen, 2-4 oraciones"},
 "quiz":{"preguntas":[
   {"tipo":"mc","q":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"máx 20 palabras"}${((m&&m.estilo)||'mc')!=='mc'?`,
   {"tipo":"abierta","q":"...","clave":["punto que la respuesta DEBE mencionar","otro punto clave"],"modelo":"respuesta ideal en 2-3 oraciones"}`:''}
@@ -2943,6 +2953,7 @@ function accionesHTML(mid){
       <button class="btn sec chico ${repasoLibre?'repaso-on':''}" id="repaso">${repasoLibre?'✓ Repaso':'🔁 Modo repaso'}</button>
       <button class="btn sec chico" id="compartir">📤 Compartir</button>
       <button class="btn sec chico" id="reiniciar">↺ Reiniciar</button>
+      <button class="btn sec chico" id="rehacer-plan">🧩 Rehacer el plan</button>
       <button class="btn sec chico" id="archivar">🗜️ Liberar espacio</button>
       <button class="btn sec chico" id="borrar">🗑 Borrar</button>
     </div>`;
@@ -2978,6 +2989,32 @@ function wireCamino(m,d){
       setTimeout(()=>alert(`Listo: liberaste ${Math.round(liberado/1024)} KB.`),100);
     }
   };
+  const brp=document.getElementById('rehacer-plan');
+  if(brp) brp.onclick=async ()=>{
+    if(!hayMotor()){ alert('Necesitás tu clave de Gemini en Ajustes (⚙️) para rehacer el plan.'); return; }
+    if(!confirm(`Rehacer el plan de "${m.nombre}".\n\nLa IA vuelve a dividir tus apuntes en unidades, ahora separando mejor los temas (un tema por unidad). Se pierde el progreso de esta materia y se regenera todo el contenido.\n\nTus apuntes NO se tocan.\n\n⚠️ Gasta cuota de tu clave.\n\n¿Seguimos?`)) return;
+    const d=datosMateria(m.id);
+    const apuntes=await apuntesDe(d);
+    if(!apuntes || !apuntes.trim()){ alert('Esta materia no tiene apuntes guardados, no se puede rehacer el plan.'); return; }
+    vista={tipo:'generando', msg:'Rehaciendo el plan, separando bien los temas…'};
+    render();
+    try{
+      const plan=await iaJSON(pPlan(m, apuntes), 8192);
+      if(!plan || !plan.unidades || !plan.unidades.length) throw new Error('El plan vino vacío. Reintentá.');
+      const d2=datosMateria(m.id);
+      d2.plan=plan;
+      d2.completados={}; d2.contenido={}; d2.explicaciones={}; d2.intentos={};
+      d2.usadas={}; d2.desempenio={porUnidad:{}, fallos:[]};
+      guardarMateria(m.id, d2);
+      vista={tipo:'camino', id:m.id};
+      render();
+    }catch(e){
+      alert(mensajeError(e));
+      vista={tipo:'camino', id:m.id};
+      render();
+    }
+  };
+
   const bre=document.getElementById('reiniciar');
   if(bre) bre.onclick=()=>{
     const dPrev=datosMateria(m.id);
