@@ -549,7 +549,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.20b';
+const APP_VERSION = '2026.07.20c';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1844,6 +1844,7 @@ function render(){
   else if(t==='estadisticas')renderEstadisticas();
   else if(t==='respaldo')renderRespaldo();
   else if(t==='compartir')renderCompartir();
+  else if(t==='exportar')renderExportar();
   else if(t==='importar')renderImportar();
   else if(t==='logros')renderLogros();
   else if(t==='ajustes')renderAjustes();
@@ -2580,6 +2581,173 @@ async function renderRespaldo(err, aviso){
 }
 
 /* ---------- compartir materia ---------- */
+/* ---------- exportar materia a PDF ---------- */
+// Arma un HTML con estilo de impresión y abre el diálogo de imprimir/guardar PDF.
+async function exportarPDF(mid, incluirPreguntas){
+  const m=materias.find(x=>x.id===mid);
+  const d=datosMateria(mid);
+  if(!m||!d||!d.plan){ alert('No se pudo leer la materia.'); return; }
+
+  const unidades=d.plan.unidades;
+  const respuestas=[];   // se juntan para la hoja final
+  let cuerpo='';
+  let huboContenido=false;
+
+  unidades.forEach((u,ui)=>{
+    // saltear la "Recta final" (simulacro) en el PDF
+    const leccionNodo=u.nodos.find(n=>n.tipo==='leccion');
+    if(!leccionNodo) return;
+    const li=u.nodos.indexOf(leccionNodo);
+    const c=d.contenido[`${ui}-${li}`];
+    if(!c||!c.puntos){ return; }   // unidad no generada: se saltea
+    huboContenido=true;
+
+    cuerpo+=`<h1 class="unidad">Unidad ${ui+1} · ${esc(u.titulo)}</h1>`;
+    cuerpo+=`<h2 class="leccion">${esc(leccionNodo.titulo)}</h2>`;
+    if(c.resumen) cuerpo+=`<p class="resumen">${esc(c.resumen)}</p>`;
+    cuerpo+=`<ul class="puntos">${(c.puntos||[]).map(p=>`<li>${esc(p)}</li>`).join('')}</ul>`;
+    if(c.ejemplo) cuerpo+=`<div class="ejemplo"><strong>Caso de examen</strong>${esc(c.ejemplo)}</div>`;
+
+    if(incluirPreguntas){
+      const quizNodo=u.nodos.find(n=>n.tipo==='quiz');
+      const qi=quizNodo?u.nodos.indexOf(quizNodo):-1;
+      const cq=qi>=0?d.contenido[`${ui}-${qi}`]:null;
+      const preguntas=(cq&&cq.preguntas)?cq.preguntas.slice(0,5):[];
+      if(preguntas.length){
+        cuerpo+=`<div class="quiz-titulo">Preguntas de repaso — Unidad ${ui+1}</div>`;
+        const respUnidad=[];
+        preguntas.forEach((p,pi)=>{
+          if(p.tipo==='abierta'){
+            cuerpo+=`<div class="preg"><div class="q">${pi+1}. ${esc(p.q)}</div><div class="linea-resp">Respuesta: _______________________________________________</div></div>`;
+            respUnidad.push(`<div class="resp-linea"><span class="num">${pi+1}.</span> ${esc((p.modelo||p.clave&&p.clave.join('; ')||'—'))}</div>`);
+          }else{
+            const ops=p.opciones||[];
+            cuerpo+=`<div class="preg"><div class="q">${pi+1}. ${esc(p.q)}</div><ol type="a">${ops.map(o=>`<li>${esc(o)}</li>`).join('')}</ol></div>`;
+            const correcta=ops[p.correcta];
+            const letra=String.fromCharCode(97+(p.correcta||0));
+            respUnidad.push(`<div class="resp-linea"><span class="num">${pi+1}.</span> ${letra}) ${esc(correcta||'')}</div>`);
+          }
+        });
+        respuestas.push({titulo:`Unidad ${ui+1} · ${esc(u.titulo)}`, lineas:respUnidad});
+      }
+    }
+  });
+
+  if(!huboContenido){
+    alert('Esta materia todavía no tiene contenido generado. Abrí algunas lecciones del camino y después exportá.');
+    return;
+  }
+
+  // hoja de respuestas al final
+  let hojaResp='';
+  if(incluirPreguntas && respuestas.length){
+    hojaResp=`<div class="respuestas"><h1>Respuestas</h1>
+      <p class="aclaracion">Primero intentá resolver las preguntas de cada unidad. Después chequeá acá.</p>`;
+    respuestas.forEach(r=>{
+      hojaResp+=`<div class="resp-unidad">${r.titulo}</div>${r.lineas.join('')}`;
+    });
+    hojaResp+=`</div>`;
+  }
+
+  const hoy=new Date().toLocaleDateString('es-AR',{day:'numeric',month:'long'});
+  const html=`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${esc(m.nombre)} — EstudioTrack</title>
+<style>
+  @page{ size:A4; margin:2cm 1.8cm; }
+  *{ box-sizing:border-box; }
+  body{ font-family:Georgia,'Times New Roman',serif; color:#1B2A4A; line-height:1.55; font-size:11pt; }
+  .portada{ text-align:center; padding-top:5cm; page-break-after:always; }
+  .portada .logo{ font-family:'Trebuchet MS',sans-serif; font-weight:800; font-size:34pt; display:inline-block; padding:0 8px; background:linear-gradient(#FFD84D,#FFD84D); background-repeat:no-repeat; background-size:100% 14px; background-position:0 82%; }
+  .portada .sub{ color:#5A6780; font-size:12pt; margin-top:6px; }
+  .portada .materia{ font-family:'Trebuchet MS',sans-serif; font-weight:800; font-size:26pt; margin-top:3.5cm; }
+  .portada .pill{ display:inline-block; background:#E3F2EA; color:#2E7D5B; border-radius:999px; padding:5px 16px; font-size:11pt; margin:4px; }
+  .portada .nota-pie{ margin-top:3.5cm; font-size:9.5pt; color:#9AA3B4; font-style:italic; }
+  h1.unidad{ font-family:'Trebuchet MS',sans-serif; font-size:11pt; text-transform:uppercase; letter-spacing:0.08em; color:#8A6528; border-bottom:2px solid #FFD84D; padding-bottom:4px; margin-top:26px; page-break-after:avoid; }
+  h2.leccion{ font-family:'Trebuchet MS',sans-serif; font-size:17pt; margin:6px 0 10px; page-break-after:avoid; }
+  .resumen{ font-style:italic; color:#41538C; margin-bottom:12px; }
+  ul.puntos{ margin:0 0 14px; padding-left:0; list-style:none; }
+  ul.puntos li{ position:relative; padding-left:20px; margin-bottom:7px; }
+  ul.puntos li::before{ content:"›"; position:absolute; left:4px; color:#2E7D5B; font-weight:bold; }
+  .ejemplo{ background:#F4F7F5; border-left:3px solid #2E7D5B; padding:11px 14px; border-radius:0 8px 8px 0; margin:12px 0 18px; font-size:10.5pt; }
+  .ejemplo strong{ display:block; font-family:'Trebuchet MS',sans-serif; font-size:8.5pt; text-transform:uppercase; letter-spacing:0.05em; color:#2E7D5B; margin-bottom:4px; }
+  .quiz-titulo{ font-family:'Trebuchet MS',sans-serif; font-size:10pt; text-transform:uppercase; letter-spacing:0.05em; color:#5A6780; margin:16px 0 8px; }
+  .preg{ margin-bottom:12px; page-break-inside:avoid; }
+  .preg .q{ font-weight:bold; margin-bottom:5px; }
+  .preg ol{ margin:0; padding-left:22px; }
+  .preg ol li{ margin-bottom:2px; }
+  .linea-resp{ color:#9AA3B4; font-size:10pt; margin-top:4px; }
+  .respuestas{ page-break-before:always; }
+  .respuestas h1{ font-family:'Trebuchet MS',sans-serif; font-size:20pt; display:inline-block; padding:0 6px; background:linear-gradient(#FFD84D,#FFD84D); background-repeat:no-repeat; background-size:100% 12px; background-position:0 88%; margin-bottom:4px; }
+  .respuestas .aclaracion{ color:#5A6780; font-size:10pt; margin-bottom:20px; font-style:italic; }
+  .resp-unidad{ font-family:'Trebuchet MS',sans-serif; font-size:12pt; text-transform:uppercase; letter-spacing:0.05em; color:#8A6528; border-bottom:1.5px solid #FFD84D; padding-bottom:3px; margin:18px 0 8px; }
+  .resp-linea{ margin-bottom:5px; }
+  .resp-linea .num{ font-weight:bold; color:#2E7D5B; }
+</style></head><body>
+<div class="portada">
+  <div class="logo">EstudioTrack</div>
+  <div class="sub">Tu camino al examen</div>
+  <div class="materia">${esc(m.nombre)}</div>
+  <div style="margin-top:1cm">
+    <span class="pill">📅 Examen: ${esc(new Date(m.fecha+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'long'}))}</span>
+    <span class="pill">🎯 Objetivo: ${esc(m.objetivo)}</span>
+    ${m.tieneParciales?'<br><span class="pill">📝 Con parciales viejos de referencia</span>':''}
+  </div>
+  <div class="nota-pie">Generado con EstudioTrack el ${hoy} · santifarah1.github.io/estudiotrack<br>Resumen de estudio armado a partir de tus apuntes.</div>
+</div>
+${cuerpo}
+${hojaResp}
+</body></html>`;
+
+  // abrir en ventana nueva y disparar el diálogo de impresión (Guardar como PDF)
+  const w=window.open('','_blank');
+  if(!w){ alert('El navegador bloqueó la ventana. Permití las ventanas emergentes para exportar el PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.onload=()=>{ setTimeout(()=>{ w.focus(); w.print(); }, 400); };
+}
+
+function renderExportar(){
+  const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
+  const m=materias.find(x=>x.id===vista.id);
+  if(!m){ vista={tipo:'inicio'}; render(); return; }
+  const d=datosMateria(m.id);
+
+  // contar cuántas unidades tienen contenido generado
+  let generadas=0, total=0;
+  (d.plan.unidades||[]).forEach((u,ui)=>{
+    const lec=u.nodos.find(n=>n.tipo==='leccion');
+    if(!lec) return;
+    total++;
+    const li=u.nodos.indexOf(lec);
+    if(d.contenido[`${ui}-${li}`]&&d.contenido[`${ui}-${li}`].puntos) generadas++;
+  });
+
+  $app.innerHTML=`
+    ${marcaHTML()}
+    <button class="volver" id="volver">← Volver al camino</button>
+    <div class="card">
+      <h2>Exportar a PDF</h2>
+      <p class="sub">Armá un documento con las lecciones de "${esc(m.nombre)}" para leer en papel, imprimir o guardar.</p>
+
+      ${generadas<total?`<div class="info-cuota" style="margin-top:4px"><strong>⚠️ ${generadas} de ${total} unidades generadas</strong>
+        Las unidades que todavía no abriste no se pueden exportar (no tienen contenido). Abrilas en el camino si querés incluirlas.</div>`:''}
+
+      <button class="btn" id="pdf-completo" style="margin-top:16px">📄 Lecciones + preguntas</button>
+      <p class="hint">El documento completo: lecciones, preguntas de cada unidad y una hoja de respuestas al final. Ideal para autoevaluarte.</p>
+
+      <button class="btn sec" id="pdf-lecciones" style="margin-top:8px">📖 Solo las lecciones</button>
+      <p class="hint">Solo el contenido de estudio, sin preguntas. Más corto, para leer de corrido.</p>
+
+      <div class="info-cuota" style="margin-top:18px">
+        <strong>💡 Cómo se guarda</strong>
+        Se abre el diálogo de impresión. Elegí <strong>"Guardar como PDF"</strong> como destino (en vez de una impresora) y listo. No gasta cuota de tu clave.
+      </div>
+    </div>`;
+  wireMarca();
+  document.getElementById('volver').onclick=()=>{vista={tipo:'camino',id:m.id};render();};
+  document.getElementById('pdf-completo').onclick=()=>exportarPDF(m.id, true);
+  document.getElementById('pdf-lecciones').onclick=()=>exportarPDF(m.id, false);
+}
+
 async function renderCompartir(){
   const _w=document.querySelector('.wrap'); if(_w){_w.classList.remove('split');_w.classList.remove('camino-solo');}
   const m=materias.find(x=>x.id===vista.id);
@@ -2957,6 +3125,7 @@ function accionesHTML(mid){
     <div class="acciones-pie">
       <button class="btn sec chico ${repasoLibre?'repaso-on':''}" id="repaso">${repasoLibre?'✓ Repaso':'🔁 Modo repaso'}</button>
       <button class="btn sec chico" id="compartir">📤 Compartir</button>
+      <button class="btn sec chico" id="exportar-pdf">📄 Exportar a PDF</button>
       <button class="btn sec chico" id="reiniciar">↺ Reiniciar (preguntas nuevas)</button>
       <button class="btn sec chico" id="rehacer-plan">🧩 Rehacer el plan (redividir temas)</button>
       <button class="btn sec chico" id="archivar">🗜️ Liberar espacio</button>
@@ -2985,6 +3154,8 @@ function wireCamino(m,d){
   if(bf) bf.onclick=()=>{ vista={tipo:'flashcards', id:m.id, cards:barajar(flashcardsDe(m.id)), fi:0, girada:false}; render(); };
   const bc=document.getElementById('compartir');
   if(bc) bc.onclick=()=>{ vista={tipo:'compartir', id:m.id}; render(); chequearLogros({compartida:true}); };
+  const bpdf=document.getElementById('exportar-pdf');
+  if(bpdf) bpdf.onclick=()=>{ vista={tipo:'exportar', id:m.id}; render(); };
   const ba=document.getElementById('archivar');
   if(ba) ba.onclick=()=>{
     const kb=Math.round(pesoMateria(m.id)/1024);
