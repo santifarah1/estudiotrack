@@ -549,7 +549,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.20';
+const APP_VERSION = '2026.07.20b';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1145,18 +1145,21 @@ function tieneClavePropia(){ return !!clavePropia; }
 // IMPORTANTE: nombres EXPLÍCITOS, nunca aliases "latest".
 // Los alias resuelven al modelo más nuevo (Flash 3.5 = $1.50/$9 por millón),
 // que es 20x más caro que Flash-Lite ($0.10/$0.40). Para esta app, Flash-Lite sobra.
+// SOLO modelos Flash-Lite (baratos). NUNCA metas acá un Flash normal:
+// el fallback automático los usaría al saturarse el barato y dispararía el costo.
 const MODELOS = [
-  'gemini-3.1-flash-lite',        // el Flash-Lite vigente: $0.25 in / $1.50 out
-  'gemini-2.5-flash-lite',        // más barato aún, pero retirado para cuentas nuevas
-  'gemini-3-flash-lite',          // variante alternativa
-  'gemini-2.5-flash'              // respaldo viejo
+  'gemini-3.1-flash-lite',        // el Flash-Lite vigente: $0.10 in / $0.40 out
+  'gemini-3-flash-lite',          // variante alternativa (mismo precio)
+  'gemini-2.5-flash-lite'         // más barato aún, pero retirado para cuentas nuevas
 ];
+// Modelos caros que NO se deben usar nunca en modo automático (solo referencia).
+const MODELOS_CAROS = ['gemini-2.5-flash','gemini-3.5-flash','gemini-3-flash'];
 // NUNCA usar aliases 'latest': resuelven al modelo más nuevo (Flash 3.5),
 // que cuesta $1.50/$9 por millón — 6 veces más caro que Flash-Lite.
 let modeloActivo = st.get('et:modelo') || MODELOS[0];
-// Forzar el modelo económico: descartar aliases 'latest' (resuelven al Flash caro)
-// y cualquier modelo que ya no esté en la lista vigente.
-if(!MODELOS.includes(modeloActivo) || /latest/.test(modeloActivo) || !/lite/.test(modeloActivo)){
+// Forzar modelo económico: descartar aliases 'latest', modelos caros guardados
+// de antes, y cualquiera que no sea Flash-Lite de la lista vigente.
+if(!MODELOS.includes(modeloActivo) || /latest/.test(modeloActivo) || !/lite/.test(modeloActivo) || MODELOS_CAROS.includes(modeloActivo)){
   modeloActivo=MODELOS[0];
   st.set('et:modelo',modeloActivo);
 }
@@ -1203,7 +1206,9 @@ async function llamadaCruda(via, modelo, partes, generationConfig){
 
 // prueba modelos alternativos si el activo devuelve 404 (nombres cambian con el tiempo)
 async function llamadaConModelos(via, contents, generationConfig){
-  const candidatos=[modeloActivo, ...MODELOS.filter(m=>m!==modeloActivo)];
+  // candidatos: el activo + el resto de Flash-Lite. Filtro final anti-caro por las dudas.
+  const candidatos=[modeloActivo, ...MODELOS.filter(m=>m!==modeloActivo)]
+    .filter(m=>/lite/.test(m) && !MODELOS_CAROS.includes(m));
   let ultimoErr;
   for(const modelo of candidatos){
     try{
@@ -2952,8 +2957,8 @@ function accionesHTML(mid){
     <div class="acciones-pie">
       <button class="btn sec chico ${repasoLibre?'repaso-on':''}" id="repaso">${repasoLibre?'✓ Repaso':'🔁 Modo repaso'}</button>
       <button class="btn sec chico" id="compartir">📤 Compartir</button>
-      <button class="btn sec chico" id="reiniciar">↺ Reiniciar</button>
-      <button class="btn sec chico" id="rehacer-plan">🧩 Rehacer el plan</button>
+      <button class="btn sec chico" id="reiniciar">↺ Reiniciar (preguntas nuevas)</button>
+      <button class="btn sec chico" id="rehacer-plan">🧩 Rehacer el plan (redividir temas)</button>
       <button class="btn sec chico" id="archivar">🗜️ Liberar espacio</button>
       <button class="btn sec chico" id="borrar">🗑 Borrar</button>
     </div>`;
