@@ -549,7 +549,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.20c';
+const APP_VERSION = '2026.07.20d';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -2697,12 +2697,38 @@ ${cuerpo}
 ${hojaResp}
 </body></html>`;
 
-  // abrir en ventana nueva y disparar el diálogo de impresión (Guardar como PDF)
-  const w=window.open('','_blank');
-  if(!w){ alert('El navegador bloqueó la ventana. Permití las ventanas emergentes para exportar el PDF.'); return; }
-  w.document.write(html);
-  w.document.close();
-  w.onload=()=>{ setTimeout(()=>{ w.focus(); w.print(); }, 400); };
+  // Imprimir vía iframe oculto (no ventana nueva).
+  // window.open rompe la app cuando está instalada como PWA (Android standalone):
+  // no hay pestañas donde abrir y el navegador cierra la app. El iframe vive
+  // dentro de la misma página, así que anda igual en PWA, celular y compu.
+  const previo=document.getElementById('pdf-frame');
+  if(previo) previo.remove();
+
+  const iframe=document.createElement('iframe');
+  iframe.id='pdf-frame';
+  // fuera de pantalla pero "visible" para el navegador (display:none rompe print en algunos)
+  iframe.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(iframe);
+
+  const idoc=iframe.contentWindow.document;
+  idoc.open();
+  idoc.write(html);
+  idoc.close();
+
+  const lanzar=()=>{
+    try{
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }catch(err){
+      alert('No se pudo abrir el diálogo de impresión. Probá desde el navegador (no la app instalada) o avisame.');
+    }
+    // limpiar el iframe un rato después (cuando ya se cerró el diálogo)
+    setTimeout(()=>{ const f=document.getElementById('pdf-frame'); if(f) f.remove(); }, 60000);
+  };
+
+  // esperar a que el iframe cargue su contenido antes de imprimir
+  if(iframe.contentWindow.document.readyState==='complete') setTimeout(lanzar,400);
+  else iframe.onload=()=>setTimeout(lanzar,400);
 }
 
 function renderExportar(){
