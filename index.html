@@ -542,7 +542,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.20e';
+const APP_VERSION = '2026.07.20f';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1345,7 +1345,15 @@ function recortar(txt, max=400000){
 }
 
 /* ---------- prompts ---------- */
-function pExplicar(m, apuntes, tituloNodo, punto){
+function pExplicar(m, apuntes, tituloNodo, punto, intento, previa){
+  // Rotación de enfoque: cada reintento ataca el punto desde otro lado.
+  const enfoques={
+    1:'Usá una ANALOGÍA o un ejemplo concreto del campo argentino si ayuda.',
+    2:'Enfocate en un EJEMPLO CONCRETO RESUELTO PASO A PASO, con números o casos reales. Nada de teoría abstracta: mostrá cómo se aplica.',
+    3:'Enfocate en el ERROR COMÚN: con qué se confunde este concepto, qué NO es, y cómo distinguirlo en el examen. Contrastalo con lo parecido.',
+    4:'Modo ULTRA SIMPLE: explicalo con palabras de todos los días, como a alguien sin ninguna base en la materia. Oraciones cortas. Cero jerga.'
+  };
+  const n=Math.min(intento||1,4);
   return `Sos un tutor universitario argentino (voseo, directo, sin vueltas). Materia: "${m.nombre}".
 El estudiante está en la lección "${tituloNodo}" y NO ENTENDIÓ este punto:
 
@@ -1355,10 +1363,13 @@ Apuntes de la materia (para que uses SU terminología y SUS datos):
 ---
 ${recortar(apuntes, 40000)}
 ---
-
+${previa?`
+⚠️ YA se le explicó así y TAMPOCO lo entendió (no repitas este enfoque ni estas frases):
+"${previa}"
+`:''}
 Explicáselo de OTRA MANERA, más simple. Reglas:
 - Arrancá de cero, como si nunca lo hubiera visto. No repitas la misma frase que no entendió.
-- Usá una analogía o un ejemplo concreto del campo argentino si ayuda.
+- ${enfoques[n]}
 - Si hay números, plazos o porcentajes, repetilos: son los que se toman en el examen.
 - Máximo 4 oraciones. Directo al hueso.
 
@@ -3380,7 +3391,10 @@ async function abrirNodo(mid, nid, forzarNuevo){
         // Preguntas ya tomadas en esta unidad (de vueltas anteriores): no se repiten.
         const idsQuiz=unidad.nodos.map((n,ni)=>n.tipo==='quiz'?`${ui}-${ni}`:null).filter(Boolean);
         const yaUsadas=idsQuiz.map(id=>d.usadas[id]||'').filter(Boolean).join(' | ');
-        const cont=await iaJSON(pUnidad(m,apuntesTxt,unidad,parcialesTxt,yaUsadas,d.reinicios||0),16384);
+        // Temperatura según vuelta: la 1ra va conservadora (0.4) para máxima
+        // coherencia lección↔quiz; en revueltas sube a 0.8 para que el "otro
+        // ángulo" que pide el prompt salga de verdad y no una paráfrasis.
+        const cont=await iaJSON(pUnidad(m,apuntesTxt,unidad,parcialesTxt,yaUsadas,d.reinicios||0),16384,false,(d.reinicios||0)>0?0.8:0.4);
         if(!cont.leccion||!cont.quiz) throw new Error('La unidad vino incompleta');
         let banco=limpiarPreguntas(cont.quiz.preguntas);
         banco=quitarRepetidas(banco, yaUsadas);   // filtro de seguridad por si la IA repitió igual
@@ -3469,14 +3483,17 @@ function renderLeccion(){
       <h2>${esc(vista.nodo.titulo)}</h2>
       <p>${esc(c.resumen)}</p>
       <div class="puntos">
-        ${(c.puntos||[]).map((p,i)=>`
+        ${(c.puntos||[]).map((p,i)=>{
+          const ex=expls[normQ(p)];
+          const agotado=ex&&(ex.intento||1)>=4;
+          return `
           <div class="punto">
             <span class="b">›</span>
             <span>${esc(p)}</span>
-            ${expls[normQ(p)]?'':`<button class="exp-btn" data-i="${i}" title="Explicámelo de otra forma">💡 No entiendo</button>`}
+            ${agotado?'':`<button class="exp-btn" data-i="${i}" title="Explicámelo de otra forma">${ex?'🔄 Sigo sin entender':'💡 No entiendo'}</button>`}
           </div>
-          <div id="exp-${i}">${expls[normQ(p)]?cajaExplicacion(expls[normQ(p)]):''}</div>
-        `).join('')}
+          <div id="exp-${i}">${ex?cajaExplicacion(ex):''}</div>
+        `;}).join('')}
       </div>
       ${c.ejemplo?`<div class="ejemplo"><strong>Caso de examen</strong>${esc(c.ejemplo)}</div>`:''}
       <button class="btn" id="listo">${repasoLibre?'Listo (repaso)':(d.completados[vista.nid]?'Volver al camino':'Entendido, siguiente ✓')}</button>
@@ -3503,8 +3520,12 @@ function renderLeccion(){
           const m=materias.find(x=>x.id===vista.mid);
           const dd=datosMateria(vista.mid);
           const apuntes=await apuntesDe(dd);
-          const r=await iaJSON(pExplicar(m, apuntes, vista.nodo.titulo, punto), 1024, false, 0.7);
-          const expl={explicacion:r.explicacion||'', tip:r.tip||''};
+          // ¿Ya hay una explicación guardada para este punto? → este es un reintento.
+          // Las guardadas sin 'intento' (versiones viejas) cuentan como intento 1.
+          const guardada=((dd.explicaciones||{})[vista.nid]||{})[normQ(punto)];
+          const intento=guardada?((guardada.intento||1)+1):1;
+          const r=await iaJSON(pExplicar(m, apuntes, vista.nodo.titulo, punto, intento, guardada&&guardada.explicacion), 1024, false, intento>1?0.9:0.7);
+          const expl={explicacion:r.explicacion||'', tip:r.tip||'', intento};
           caja.innerHTML=cajaExplicacion(expl);
           // guardar para no volver a gastar cuota
           const d2=datosMateria(vista.mid);
@@ -3512,7 +3533,13 @@ function renderLeccion(){
           if(!d2.explicaciones[vista.nid]) d2.explicaciones[vista.nid]={};
           d2.explicaciones[vista.nid][normQ(punto)]=expl;   // clave = texto del punto
           guardarMateria(vista.mid,d2);
-          btn.remove();
+          if(intento>=4){
+            // 4 enfoques distintos y sigue sin cerrar: la IA ya dio lo que tenía
+            btn.remove();
+            caja.insertAdjacentHTML('beforeend','<p class="hint" style="margin-top:6px">Ya te lo expliqué de 4 formas distintas. Si sigue sin cerrar, anotalo para preguntarle al profe o releé esa parte de tus apuntes.</p>');
+          }else{
+            btn.disabled=false; btn.textContent='🔄 Sigo sin entender';
+          }
           chequearLogros({explicacion:true});
         }catch(e){
           caja.innerHTML=`<div class="exp-caja"><strong>💡 Explicación</strong>${esc(mensajeError(e))}</div>`;
