@@ -542,7 +542,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.20g';
+const APP_VERSION = '2026.07.20h';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -2089,20 +2089,26 @@ function renderAjustes(err){
   if(bup) bup.onclick=async ()=>{
     bup.disabled=true; bup.textContent='Buscando…';
     try{
-      const reg=await navigator.serviceWorker.getRegistration();
-      if(!reg){ bup.textContent='No disponible acá'; return; }
-      await reg.update();
-      // esperar un momento a que el navegador procese la versión nueva
-      await new Promise(r=>setTimeout(r,1200));
-      if(reg.waiting){
-        bup.textContent='¡Hay una versión nueva!';
-        reg.waiting.postMessage({tipo:'ACTIVAR_YA'});   // se recarga sola
+      // Leer el index.html VIVO del servidor y comparar su APP_VERSION con la nuestra.
+      // (reg.update() acá no sirve: re-chequea sw.js?v=VERSION_VIEJA, que nunca cambia.)
+      // El ?chk= evita que el service worker nos devuelva el HTML cacheado.
+      const res=await fetch('index.html?chk='+Date.now(),{cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const txt=await res.text();
+      const mm=txt.match(/APP_VERSION\s*=\s*'([^']+)'/);
+      const remota=mm&&mm[1];
+      if(remota && remota!==APP_VERSION){
+        bup.textContent='✨ ¡Versión '+remota+' disponible! Actualizando…';
+        setTimeout(()=>location.reload(),800);   // el HTML va red-primero: recargar ya la trae
       }else{
-        bup.textContent='✓ Ya tenés la última';
+        bup.textContent='✓ Ya tenés la última ('+APP_VERSION+')';
+        // de paso, empujar el SW por si quedó uno esperando activar
+        const reg=await navigator.serviceWorker.getRegistration().catch(()=>null);
+        if(reg){ reg.update().catch(()=>{}); if(reg.waiting) reg.waiting.postMessage({tipo:'ACTIVAR_YA'}); }
         setTimeout(()=>{bup.textContent='🔄 Buscar actualización';bup.disabled=false;},2500);
       }
     }catch(e){
-      bup.textContent='No se pudo. Probá recargar la página.';
+      bup.textContent='No pude verificar (¿sin conexión?)';
       setTimeout(()=>{bup.textContent='🔄 Buscar actualización';bup.disabled=false;},2500);
     }
   };
