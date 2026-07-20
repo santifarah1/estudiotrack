@@ -396,16 +396,9 @@
 <script>
 /* =========================================================
    EstudioTrack — camino de estudio con IA, gratis
-   Motor principal: worker compartido (Cloudflare) con la clave del admin.
-   Plan B opcional: clave propia de Gemini del usuario (en Ajustes).
+   Motor: la clave propia de Gemini de cada usuario (se carga en Ajustes).
+   No hay backend: todo corre en el navegador, los datos en localStorage.
    ========================================================= */
-
-/* >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-   CONFIGURACIÓN DEL ADMIN (Santi): pegá acá la URL de tu worker
-   Ej: 'https://estudiotrack.tuusuario.workers.dev'
-   Si queda vacío, la app pide clave propia a cada usuario.
-   <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< */
-const BACKEND_URL = 'https://estudiotrack.eliasfarah166.workers.dev';
 
 const $app = document.getElementById('app');
 
@@ -549,7 +542,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.20d';
+const APP_VERSION = '2026.07.20e';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1164,23 +1157,14 @@ if(!MODELOS.includes(modeloActivo) || /latest/.test(modeloActivo) || !/lite/.tes
   st.set('et:modelo',modeloActivo);
 }
 
-async function llamadaCruda(via, modelo, partes, generationConfig){
+async function llamadaCruda(modelo, partes, generationConfig){
   // Gemini espera contents:[{parts:[...]}] — las partes van envueltas
   const contents=[{parts:partes}];
-  let res;
-  if(via==='backend'){
-    res = await fetch(BACKEND_URL, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:modelo, contents, generationConfig})
-    });
-  }else{
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json','x-goog-api-key':clavePropia.trim()},
-      body:JSON.stringify({contents, generationConfig})
-    });
-  }
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-goog-api-key':clavePropia.trim()},
+    body:JSON.stringify({contents, generationConfig})
+  });
   const data = await res.json().catch(()=>({error:{message:'Respuesta ilegible (HTTP '+res.status+')'}}));
   if(data.error){
     const msg = data.error.message||'Error de la API';
@@ -1205,14 +1189,14 @@ async function llamadaCruda(via, modelo, partes, generationConfig){
 }
 
 // prueba modelos alternativos si el activo devuelve 404 (nombres cambian con el tiempo)
-async function llamadaConModelos(via, contents, generationConfig){
+async function llamadaConModelos(contents, generationConfig){
   // candidatos: el activo + el resto de Flash-Lite. Filtro final anti-caro por las dudas.
   const candidatos=[modeloActivo, ...MODELOS.filter(m=>m!==modeloActivo)]
     .filter(m=>/lite/.test(m) && !MODELOS_CAROS.includes(m));
   let ultimoErr;
   for(const modelo of candidatos){
     try{
-      const r = await llamadaCruda(via, modelo, contents, generationConfig);
+      const r = await llamadaCruda(modelo, contents, generationConfig);
       if(modelo!==modeloActivo){modeloActivo=modelo;st.set('et:modelo',modelo);}
       return r;
     }catch(e){
@@ -1235,7 +1219,7 @@ async function gemini(contents, generationConfig){
   let ultimoErr=null;
   for(let intento=0;intento<2;intento++){
     try{
-      return await llamadaConModelos('propia', contents, generationConfig);
+      return await llamadaConModelos(contents, generationConfig);
     }catch(e){
       ultimoErr=e;
       if(e.message==='LIMITE'){
@@ -2064,7 +2048,7 @@ function renderAjustes(err){
     const lineas=[];
     for(const modelo of MODELOS){
       try{
-        await llamadaCruda('propia', modelo, [{text:'Decí solo: ok'}], {maxOutputTokens:20});
+        await llamadaCruda(modelo, [{text:'Decí solo: ok'}], {maxOutputTokens:20});
         lineas.push(`<div style="color:var(--aprobado);font-weight:600">✓ ${modelo} — funciona</div>`);
       }catch(e){
         const detalle = e.crudo ? e.crudo : (e.message||'');
@@ -2126,7 +2110,7 @@ function renderAjustes(err){
     st.set('et:key',k);              // guardar SIEMPRE: si la prueba falla, igual queda cargada
     btn.disabled=true;btn.textContent='Probando…';
     try{
-      await llamadaConModelos('propia',[{text:'Respondé solo con este JSON: {"ok":true}'}],{maxOutputTokens:50});
+      await llamadaConModelos([{text:'Respondé solo con este JSON: {"ok":true}'}],{maxOutputTokens:50});
       vista=volver;render();
     }catch(e){
       btn.disabled=false;btn.textContent='Guardar y probar';
@@ -3760,6 +3744,15 @@ function renderResultado(total){
 }
 
 /* ---------- PWA: registrar service worker + botón instalar ---------- */
+
+// Pedirle al navegador que NO borre los datos por presión de almacenamiento.
+// Sin esto, Android/Chrome puede vaciar el localStorage de una PWA que no se
+// abre por semanas, y el usuario pierde materias y progreso sin aviso.
+// Es un pedido silencioso: si lo rechaza, todo sigue igual que antes.
+if(navigator.storage && navigator.storage.persist){
+  navigator.storage.persist().catch(()=>{});
+}
+
 if('serviceWorker' in navigator){
   let regGlobal=null;
   window.addEventListener('load',async ()=>{
