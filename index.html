@@ -572,7 +572,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.05a';
+const APP_VERSION = '2026.08.05b';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1463,29 +1463,36 @@ Si dos temas tienen tecnologías, datos o procesos diferentes, van en unidades S
 
 Dividí el material en tantas unidades como haga falta para que cada una sea UN tema bien acotado (típicamente entre 6 y 15, pero si el material lo pide pueden ser más). Ordenalas de forma lógica para estudiar. Cada unidad DEBE tener al menos 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
 
-📐 INVENTARIO DE EJERCICIOS (se entrega en el JSON, no es opcional):
-Muchísimo material universitario trae una tanda de ejercicios prácticos, casi siempre AL FINAL, después de toda la teoría. Recorré el material de punta a punta y listá en el campo "ejercicios" TODOS los que encuentres.
-Un ejercicio de verdad tiene: un enunciado con un caso concreto, datos numéricos propios y una consigna que pide calcular ("calcule", "determine", "estime", "¿cuántos…?", "¿a cuánto asciende…?"), casi siempre con ítems a) b) c).
-⛔ NO son ejercicios: una lámina de teoría con números, un gráfico con valores, una tabla de referencia, un ejemplo resuelto dentro de la explicación. Si no hay un enunciado que le pida algo al estudiante, NO va en la lista. Es preferible una lista vacía a una lista inventada.
-Para cada ejercicio anotá: su número, un título corto, y a qué UNIDAD de tu plan pertenece — por lo que el ejercicio pide, no por dónde está escrito. Casi siempre están todos juntos al final pero cada uno es de un tema distinto: uno sobre metros de comedero va a la unidad de instalaciones aunque esté en la última página; uno sobre alquilar corrales a un tercero va a la de modelos de negocio. El campo "unidad" tiene que ser el título EXACTO de una de las unidades que armaste.
-Si el material trae 5, 6 o 7 ejercicios, es imposible que sean todos del mismo tema: repartilos.
+🧮 NODO DE PRÁCTICA: si el tema de una unidad se resuelve con cuentas (superficies, costos, dosis, densidades, rendimientos, porcentajes aplicados), agregale un TERCER nodo tipo "practica" después del quiz. Las unidades puramente conceptuales (definiciones, historia, clasificaciones, ventajas y desventajas) van con 2 nodos. La "Recta final" nunca lleva práctica.
+De los ejercicios que pueda traer el material no te ocupes acá: eso lo pregunto aparte.
 
-🧮 NODO DE PRÁCTICA: NO hace falta que agregues nodos tipo "practica" para los ejercicios del inventario — los agrego yo a partir de tu lista. Agregá un nodo "practica" (tercero, después del quiz) solo en las unidades cuyo tema se resuelve con cuentas y que NO tienen ningún ejercicio asignado: superficies, costos, dosis, densidades, rendimientos, porcentajes aplicados. Las unidades puramente conceptuales (definiciones, historia, clasificaciones, ventajas y desventajas) van con 2 nodos. La "Recta final" nunca lleva práctica.
-
-Respondé SOLO con este JSON (sin texto antes ni después), con los dos campos: "unidades" y "ejercicios" ("ejercicios" puede ser [] si el material no trae práctico). Agregá tantas unidades como haga falta para que cada una sea UN tema acotado (normalmente 6 a 15, más la Recta final). Antes mezclabas temas para que entraran pocas unidades: NO lo hagas, preferí más unidades y más chicas:
+Respondé SOLO con este JSON (sin texto antes ni después). Agregá tantas unidades como haga falta para que cada una sea UN tema acotado (normalmente 6 a 15, más la Recta final). Antes mezclabas temas para que entraran pocas unidades: NO lo hagas, preferí más unidades y más chicas:
 {"unidades":[
 {"titulo":"Nombre del tema 1","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Nombre del tema 2","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Nombre del tema 3 (este SÍ tiene cuentas)","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."},{"tipo":"practica","titulo":"Ejercicios de ...","temas":"qué se calcula acá"}]},
 {"titulo":"Nombre del tema 4","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Recta final","nodos":[{"tipo":"simulacro","titulo":"Simulacro de examen","temas":"todo"}]}
-],
-"ejercicios":[
-{"n":1,"titulo":"Cálculo de superficie y capacidad","unidad":"Nombre exacto de la unidad que le toca"},
-{"n":2,"titulo":"Dimensionamiento de comederos","unidad":"Nombre exacto de otra unidad"}
 ]}
 Títulos de máx 6 palabras, "temas" de máx 15 palabras.`;
 }
+// Pide el inventario y engancha los nodos de práctica. Si falla (cuota, red, JSON
+// roto) NO rompe la creación de la materia: el plan ya está bien, solo se queda
+// sin los nodos de los ejercicios del profe.
+async function mapearEjercicios(m, apuntes, plan){
+  try{
+    const titulos=(plan.unidades||[])
+      .filter(u=>!(u.nodos||[]).some(n=>n.tipo==='simulacro'))
+      .map(u=>u.titulo);
+    if(!titulos.length) return [];
+    const r=await iaJSON(pEjercicios(m, apuntes, titulos), 2048, false, 0.2);
+    const lista=((r&&r.ejercicios)||[]).filter(e=>e&&e.unidad);
+    plan.ejercicios=lista;
+    armarPracticas(plan);
+    return lista;
+  }catch(e){ return []; }
+}
+
 // Los nodos de práctica de los ejercicios del profe los crea el JS, no la IA:
 // la IA solo dice QUÉ ejercicio es de QUÉ unidad (trabajo semántico) y acá se
 // hace la contabilidad (trabajo determinístico). Antes se le pedían las dos
@@ -1610,6 +1617,39 @@ Respondé SOLO con este JSON (sin markdown):
   {"tipo":"abierta","q":"...","clave":["punto que la respuesta DEBE mencionar","otro punto clave"],"modelo":"respuesta ideal en 2-3 oraciones"}`:''}
 ]}}
 (el array "preguntas" tiene que traer exactamente 15)`;
+}
+
+// Segundo pedido, chico y con UN solo trabajo: encontrar los ejercicios del práctico
+// y decir a qué unidad va cada uno. Cuando esto viajaba adentro de pPlan la IA lo
+// hacía por arriba: tenía que dividir 60 páginas y buscar ejercicios a la vez.
+function pEjercicios(m, apuntes, titulos){
+  return `Materia: "${m.nombre}". Tu única tarea es encontrar los EJERCICIOS PRÁCTICOS que trae este material y decir a qué unidad va cada uno. No armes lecciones ni preguntas: solo la lista.
+
+Material:
+---
+${recortar(apuntes)}
+---
+
+Unidades del plan de estudio (usá estos títulos EXACTOS):
+${titulos.map((t,i)=>`${i+1}. ${t}`).join('\n')}
+
+QUÉ BUSCAR: casi todo el material universitario trae una tanda de ejercicios, generalmente AL FINAL, después de toda la teoría. Recorré el material de punta a punta, especialmente las últimas páginas o diapositivas.
+Un ejercicio de verdad tiene las tres cosas: (1) un enunciado que plantea un caso concreto, (2) datos numéricos propios de ese caso, (3) una consigna que le pide algo al estudiante ("calcule", "determine", "estime", "¿cuántos…?", "¿a cuánto asciende…?", "¿en cuántos meses se recupera…?"). Casi siempre vienen numerados y con ítems a) b) c).
+
+⛔ NO son ejercicios y NO van en la lista:
+- Una lámina de teoría que muestra números o un gráfico con valores.
+- Una tabla de referencia (densidades, dosis, precios).
+- Un ejemplo ya resuelto dentro de una explicación.
+Si no hay una consigna dirigida al estudiante, no es un ejercicio. Lista vacía es una respuesta perfectamente válida y mucho mejor que una lista inventada.
+
+A QUÉ UNIDAD VA CADA UNO: por lo que el ejercicio PIDE, no por dónde está escrito. Están casi todos juntos al final, pero cada uno es de un tema distinto: uno sobre metros lineales de comedero va a la unidad de instalaciones aunque esté en la última página; uno sobre alquilarle corrales a un tercero va a la de modelos de negocio; uno sobre superficie por animal va a la de diseño.
+Si el material trae 5, 6 o 7 ejercicios es imposible que sean todos del mismo tema: repartilos entre las unidades que correspondan.
+
+Respondé SOLO con este JSON (sin markdown):
+{"ejercicios":[
+{"n":1,"titulo":"título corto del ejercicio (máx 8 palabras)","unidad":"título exacto de la unidad de la lista"},
+{"n":2,"titulo":"...","unidad":"..."}
+]}`;
 }
 
 // Ejercicios prácticos de una unidad. La IA plantea, el JS calcula.
@@ -3413,16 +3453,19 @@ function renderNueva(err){
       const m={id:'m'+Date.now(),nombre,fecha,objetivo,estilo,tieneParciales:!!parciales};
       let plan=null;
       for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
-        const p=armarPracticas(normalizarPlan(await iaJSON(pPlan(m,apuntes),8192,true)));
+        const p=normalizarPlan(await iaJSON(pPlan(m,apuntes),8192,true));
         const unidades=(p&&p.unidades)||[];
         const conNodos=unidades.filter(u=>u.nodos&&u.nodos.length);
         if(unidades.length>=3 && conNodos.length>=3){ plan=p; break; }
       }
       if(!plan) throw new Error('La IA armó un plan demasiado corto. Reintentá, o subí apuntes con un poco más de contenido.');
+      // segundo pedido: los ejercicios del práctico y a qué unidad va cada uno
+      vista={tipo:'generando',msg:'Buscando los ejercicios prácticos del material…'};render();
+      const ejDetectados=await mapearEjercicios(m, apuntes, plan);
       materias.push(m);
       J.set('et:materias',materias);
       const apuntesComp=await comprimirTexto(recortar(apuntes,500000));
-      const datos={apuntes:apuntesComp,plan,completados:{},contenido:{},usadas:{}};
+      const datos={apuntes:apuntesComp,plan,completados:{},contenido:{},usadas:{},ejerciciosDetectados:ejDetectados};
       if(parciales) datos.parciales=await comprimirTexto(recortar(parciales,120000));
       guardarMateria(m.id,datos);
       chequearLogros({materiaCreada:true, diasAlCrear:diasRestantes(fecha)});
@@ -3494,6 +3537,15 @@ function cabeceraHTML(m,d){
       <div class="barra"><div style="width:${pct}%"></div></div>
       <div class="barra-label">${pct}% del camino recorrido${pct===100?' — ¡a rendir tranquilo! 🎓':''}${(d.vueltas||0)>0?` · <strong>completada ${d.vueltas} ${d.vueltas===1?'vez':'veces'}</strong> 🔂`:''}</div>
       ${m.tieneParciales?`<div class="barra-label">📝 Con parciales viejos de referencia — las preguntas siguen el estilo del profe</div>`:''}
+      ${(()=>{
+        // Diagnóstico honesto: te digo qué encontré y dónde lo puse, para que sepas
+        // si la app leyó los ejercicios de tu práctico o directamente no los vio.
+        const ej=d.ejerciciosDetectados;
+        if(!Array.isArray(ej)) return '';   // plan viejo, anterior a esta versión
+        const conPractica=(d.plan.unidades||[]).filter(u=>(u.nodos||[]).some(n=>n.tipo==='practica')).length;
+        if(!ej.length) return `<div class="barra-label">🧮 No detecté ejercicios prácticos en el material${conPractica?` · ${conPractica} unidad${conPractica===1?'':'es'} con práctica igual`:''}</div>`;
+        return `<div class="barra-label">🧮 <strong>${ej.length} ejercicio${ej.length===1?'':'s'} del práctico</strong> detectado${ej.length===1?'':'s'}, repartido${ej.length===1?'':'s'} en ${conPractica} unidad${conPractica===1?'':'es'}</div>`;
+      })()}
     </div>`;
 }
 
@@ -3576,10 +3628,13 @@ function wireCamino(m,d){
     vista={tipo:'generando', msg:'Rehaciendo el plan, separando bien los temas…'};
     render();
     try{
-      const plan=armarPracticas(normalizarPlan(await iaJSON(pPlan(m, apuntes), 8192)));
+      const plan=normalizarPlan(await iaJSON(pPlan(m, apuntes), 8192));
       if(!plan || !plan.unidades || !plan.unidades.length) throw new Error('El plan vino vacío. Reintentá.');
+      vista={tipo:'generando',msg:'Buscando los ejercicios prácticos del material…'};render();
+      const ejDetectados=await mapearEjercicios(m, apuntes, plan);
       const d2=datosMateria(m.id);
       d2.plan=plan;
+      d2.ejerciciosDetectados=ejDetectados;
       d2.completados={}; d2.contenido={}; d2.explicaciones={}; d2.explicRtas={}; d2.intentos={};
       d2.usadas={}; d2.desempenio={porUnidad:{}, fallos:[]};
       guardarMateria(m.id, d2);
