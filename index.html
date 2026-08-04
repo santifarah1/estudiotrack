@@ -572,7 +572,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.04b';
+const APP_VERSION = '2026.08.05a';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1463,27 +1463,75 @@ Si dos temas tienen tecnologías, datos o procesos diferentes, van en unidades S
 
 Dividí el material en tantas unidades como haga falta para que cada una sea UN tema bien acotado (típicamente entre 6 y 15, pero si el material lo pide pueden ser más). Ordenalas de forma lógica para estudiar. Cada unidad DEBE tener al menos 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
 
-📐 PASO PREVIO OBLIGATORIO — BUSCÁ LOS EJERCICIOS DEL PROFE:
-Muchísimo material universitario trae una tanda de ejercicios prácticos, casi siempre AL FINAL, después de toda la teoría. Antes de armar el plan, recorré el material buscando esa sección: enunciados con datos numéricos, consignas tipo "calcule", "determine", "estime", "¿cuántos…?", "¿cuánto cuesta…?", ítems a) b) c).
-Para CADA ejercicio que encuentres, identificá DE QUÉ TEMA es — por los datos que usa y por lo que pide, no por dónde está ubicado. Los ejercicios suelen estar todos juntos al final, pero cada uno pertenece al tema del que habla: uno sobre metros lineales de comedero va a la unidad de instalaciones aunque esté en la última página; uno sobre alquilar corrales va a la unidad de modelos de negocio.
+📐 INVENTARIO DE EJERCICIOS (se entrega en el JSON, no es opcional):
+Muchísimo material universitario trae una tanda de ejercicios prácticos, casi siempre AL FINAL, después de toda la teoría. Recorré el material de punta a punta y listá en el campo "ejercicios" TODOS los que encuentres.
+Un ejercicio de verdad tiene: un enunciado con un caso concreto, datos numéricos propios y una consigna que pide calcular ("calcule", "determine", "estime", "¿cuántos…?", "¿a cuánto asciende…?"), casi siempre con ítems a) b) c).
+⛔ NO son ejercicios: una lámina de teoría con números, un gráfico con valores, una tabla de referencia, un ejemplo resuelto dentro de la explicación. Si no hay un enunciado que le pida algo al estudiante, NO va en la lista. Es preferible una lista vacía a una lista inventada.
+Para cada ejercicio anotá: su número, un título corto, y a qué UNIDAD de tu plan pertenece — por lo que el ejercicio pide, no por dónde está escrito. Casi siempre están todos juntos al final pero cada uno es de un tema distinto: uno sobre metros de comedero va a la unidad de instalaciones aunque esté en la última página; uno sobre alquilar corrales a un tercero va a la de modelos de negocio. El campo "unidad" tiene que ser el título EXACTO de una de las unidades que armaste.
+Si el material trae 5, 6 o 7 ejercicios, es imposible que sean todos del mismo tema: repartilos.
 
-🧮 NODO DE PRÁCTICA (unidad por unidad): una unidad lleva un TERCER nodo tipo "practica", DESPUÉS del quiz, si:
-  (a) le corresponde al menos uno de los ejercicios del profe que acabás de mapear, o
-  (b) su tema se resuelve con cuentas (superficies, costos, dosis, densidades, rendimientos, porcentajes aplicados).
-En el nodo "practica" agregá un campo "ejercicios" con la lista corta de los ejercicios del profe que van ahí (ej: "Ejercicio 2 (metros de comedero) y Ejercicio 5 (piso de barro vs hormigón)"). Si no hay ninguno del profe, poné "ejercicios":"" y listo.
-Si la unidad es puramente conceptual (definiciones, historia, clasificaciones, ventajas y desventajas) y no le toca ningún ejercicio, NO le pongas práctica: dejala con 2 nodos.
-⚠️ Si el material traía 5, 6 o 7 ejercicios, es imposible que todos sean del mismo tema: repartí el nodo de práctica entre VARIAS unidades. Que quede una sola unidad con práctica cuando había muchos ejercicios significa que no los buscaste bien. La "Recta final" nunca lleva práctica.
+🧮 NODO DE PRÁCTICA: NO hace falta que agregues nodos tipo "practica" para los ejercicios del inventario — los agrego yo a partir de tu lista. Agregá un nodo "practica" (tercero, después del quiz) solo en las unidades cuyo tema se resuelve con cuentas y que NO tienen ningún ejercicio asignado: superficies, costos, dosis, densidades, rendimientos, porcentajes aplicados. Las unidades puramente conceptuales (definiciones, historia, clasificaciones, ventajas y desventajas) van con 2 nodos. La "Recta final" nunca lleva práctica.
 
-Respondé SOLO con este JSON (sin texto antes ni después). Agregá tantas unidades como haga falta para que cada una sea UN tema acotado (normalmente 6 a 15, más la Recta final). Antes mezclabas temas para que entraran pocas unidades: NO lo hagas, preferí más unidades y más chicas:
+Respondé SOLO con este JSON (sin texto antes ni después), con los dos campos: "unidades" y "ejercicios" ("ejercicios" puede ser [] si el material no trae práctico). Agregá tantas unidades como haga falta para que cada una sea UN tema acotado (normalmente 6 a 15, más la Recta final). Antes mezclabas temas para que entraran pocas unidades: NO lo hagas, preferí más unidades y más chicas:
 {"unidades":[
 {"titulo":"Nombre del tema 1","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Nombre del tema 2","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
-{"titulo":"Nombre del tema 3 (este SÍ tiene cuentas)","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."},{"tipo":"practica","titulo":"Ejercicios de ...","temas":"qué se calcula acá","ejercicios":"Ejercicio 2 (tema) y Ejercicio 5 (tema), o vacío si no hay del profe"}]},
+{"titulo":"Nombre del tema 3 (este SÍ tiene cuentas)","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."},{"tipo":"practica","titulo":"Ejercicios de ...","temas":"qué se calcula acá"}]},
 {"titulo":"Nombre del tema 4","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Recta final","nodos":[{"tipo":"simulacro","titulo":"Simulacro de examen","temas":"todo"}]}
+],
+"ejercicios":[
+{"n":1,"titulo":"Cálculo de superficie y capacidad","unidad":"Nombre exacto de la unidad que le toca"},
+{"n":2,"titulo":"Dimensionamiento de comederos","unidad":"Nombre exacto de otra unidad"}
 ]}
 Títulos de máx 6 palabras, "temas" de máx 15 palabras.`;
 }
+// Los nodos de práctica de los ejercicios del profe los crea el JS, no la IA:
+// la IA solo dice QUÉ ejercicio es de QUÉ unidad (trabajo semántico) y acá se
+// hace la contabilidad (trabajo determinístico). Antes se le pedían las dos
+// cosas y se olvidaba de la segunda.
+function armarPracticas(p){
+  try{
+    const lista=((p&&p.ejercicios)||[]).filter(e=>e&&e.n!=null);
+    const unidades=(p&&p.unidades)||[];
+    if(!lista.length||!unidades.length) return p;
+    const norm=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const esRecta=u=>/recta final/.test(norm(u.titulo))||(u.nodos||[]).some(n=>n.tipo==='simulacro');
+    // ¿a qué unidad va cada ejercicio? título exacto y, si no, la de más palabras en común
+    const buscar=nombre=>{
+      const q=norm(nombre);
+      if(!q) return null;
+      let u=unidades.find(x=>!esRecta(x)&&norm(x.titulo)===q);
+      if(u) return u;
+      const pal=q.split(' ').filter(w=>w.length>3);
+      let mejor=null, mejorN=0;
+      unidades.forEach(x=>{
+        if(esRecta(x)) return;
+        const t=norm(x.titulo);
+        const n=pal.filter(w=>t.indexOf(w)>=0).length;
+        if(n>mejorN){ mejorN=n; mejor=x; }
+      });
+      return mejorN>0?mejor:null;
+    };
+    const porUnidad=new Map();
+    lista.forEach(e=>{
+      const u=buscar(e.unidad);
+      if(!u) return;
+      if(!porUnidad.has(u)) porUnidad.set(u,[]);
+      porUnidad.get(u).push(e);
+    });
+    porUnidad.forEach((ejs,u)=>{
+      let nodo=(u.nodos||[]).find(n=>n.tipo==='practica');
+      if(!nodo){
+        nodo={tipo:'practica',titulo:'Ejercicios de '+u.titulo,temas:u.titulo};
+        u.nodos=u.nodos||[]; u.nodos.push(nodo);   // siempre después del quiz
+      }
+      nodo.ejercicios=ejs.map(e=>`Ejercicio ${e.n}${e.titulo?' ('+e.titulo+')':''}`).join(', ');
+    });
+  }catch(e){}
+  return p;
+}
+
 // Normaliza los tipos de nodo que devuelve la IA (mayúsculas, acentos, sinónimos).
 // Un tipo desconocido rompería abrirNodo, así que se cae a "quiz".
 function normalizarPlan(p){
@@ -1575,13 +1623,14 @@ ${recortar(apuntes)}
 ---
 ${leccionTxt?`\nLo que el estudiante YA estudió en esta unidad:\n---\n${leccionTxt.slice(0,4000)}\n---\n`:''}
 Tema de la práctica: "${nodo.titulo}" (${nodo.temas||unidad.titulo}).
-${nodo.ejercicios?`\n⭐ Al armar el plan ya identifiqué qué ejercicios del profe le corresponden a esta unidad: ${nodo.ejercicios}\nBuscalos en los apuntes y usá ESOS.\n`:''}
+${nodo.ejercicios?`\n⭐ EJERCICIOS DEL PROFE QUE LE TOCAN A ESTA UNIDAD: ${nodo.ejercicios}\nBuscá esos enunciados en los apuntes y pasalos tal cual. Son los únicos que podés marcar "origen":"profe".\n`:`\n⚠️ Esta unidad NO tiene ejercicios del profe asignados: todos los que generes son inventados por vos y van con "origen":"propio". Ni uno solo puede decir "profe".\n`}
 
 ⛔ REGLA CENTRAL — VOS NO HACÉS LAS CUENTAS:
 No resuelvas nada de aritmética. Escribí el PLANTEO como fórmulas y la app las va a calcular sola. Vos ponés los datos y la fórmula; el número exacto lo saca el programa. Esto es obligatorio: un número mal sumado le arruina el estudio al estudiante.
 
 ⭐ PRIORIDAD ABSOLUTA — LOS EJERCICIOS DEL PROFE:
-Si en los apuntes hay ejercicios ya escritos que corresponden a esta unidad, usá ESOS: mismo enunciado, mismos datos, mismos ítems a) b) c), mismo orden. No los reformules, no los "mejores", no les cambies los números. Son literalmente los que le van a tomar en el parcial. Tu trabajo con ellos es UNO SOLO: pasarlos a este formato JSON agregándoles el planteo. Marcalos con "origen":"profe".
+Si arriba te pasé una lista de ejercicios del profe para esta unidad, buscá cada uno en los apuntes y usalo tal cual: mismo enunciado, mismos datos, mismos ítems a) b) c), mismo orden. No los reformules, no los "mejores", no les cambies los números. Son literalmente los que le van a tomar en el parcial. Tu trabajo con ellos es UNO SOLO: pasarlos a este formato JSON agregándoles el planteo. Marcalos con "origen":"profe".
+⛔ "origen":"profe" es SOLO para los de esa lista. Un caso que armaste vos con números que sacaste de una lámina de teoría, de un gráfico o de una tabla NO es un ejercicio del profe: va "propio". Mentir acá es grave, porque el estudiante confía en esa etiqueta para saber qué le van a tomar.
 - Si un ejercicio del profe termina en una consigna de análisis o discusión que no se resuelve con números ("discuta el impacto…", "¿qué perfil de riesgo…?"), ese ítem va como tipo "concepto" con su respuesta modelo. No lo tires.
 - Si un ejercicio del profe toca varios temas, incluilo igual mientras el grueso sea de esta unidad.
 Recién DESPUÉS de haber pasado todos los del profe, si quedaron menos de 3, completá con ejercicios propios en el mismo estilo y marcalos "origen":"propio".
@@ -1599,7 +1648,7 @@ Generá entre 2 y 5 ejercicios en total (los del profe van primero y completos).
    - "resultadoIA": tu estimación del resultado. La app la usa solo para detectar planteos rotos; el número que se muestra es el que calcula ella.
 5) Ítems conceptuales (tipo "concepto"): las preguntas de análisis que acompañan a la cuenta ("¿qué implica esto para la escala del negocio?", "¿qué perfil de riesgo busca?"). NO llevan pasos: llevan "modelo", una respuesta modelo de 2 a 4 oraciones que conecte el número con la decisión de manejo. Poné uno cuando el tema lo pida, no en todos.
 6) Cada ejercicio DEBE tener al menos un ítem numérico. Si un ejercicio del profe fuera puramente conceptual, no lo pongas acá: eso va al quiz.
-7) "origen": "profe" si el ejercicio está textualmente en los apuntes, "propio" si lo inventaste vos. No mientas: si lo inventaste, va "propio".
+7) "origen": "profe" SOLO si el ejercicio figura en la lista que te pasé arriba y su enunciado está textualmente en los apuntes. En cualquier otro caso, "propio".
 
 Respondé SOLO con este JSON (sin markdown):
 {"ejercicios":[
@@ -3364,7 +3413,7 @@ function renderNueva(err){
       const m={id:'m'+Date.now(),nombre,fecha,objetivo,estilo,tieneParciales:!!parciales};
       let plan=null;
       for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
-        const p=normalizarPlan(await iaJSON(pPlan(m,apuntes),6144,true));
+        const p=armarPracticas(normalizarPlan(await iaJSON(pPlan(m,apuntes),8192,true)));
         const unidades=(p&&p.unidades)||[];
         const conNodos=unidades.filter(u=>u.nodos&&u.nodos.length);
         if(unidades.length>=3 && conNodos.length>=3){ plan=p; break; }
@@ -3527,7 +3576,7 @@ function wireCamino(m,d){
     vista={tipo:'generando', msg:'Rehaciendo el plan, separando bien los temas…'};
     render();
     try{
-      const plan=normalizarPlan(await iaJSON(pPlan(m, apuntes), 8192));
+      const plan=armarPracticas(normalizarPlan(await iaJSON(pPlan(m, apuntes), 8192)));
       if(!plan || !plan.unidades || !plan.unidades.length) throw new Error('El plan vino vacío. Reintentá.');
       const d2=datosMateria(m.id);
       d2.plan=plan;
@@ -3723,6 +3772,10 @@ async function abrirNodo(mid, nid, forzarNuevo){
         const cont=await iaJSON(pPractica(m,apuntesTxt,unidad,lecTxt),8192,false,forzarNuevo?0.9:0.5);
         const buenos=(cont.ejercicios||[]).map(prepararEjercicio).filter(Boolean);
         if(!buenos.length) throw new Error('Los ejercicios vinieron con las fórmulas rotas. Probá de nuevo.');
+        // Red de seguridad: si el plan no le asignó ejercicios del profe a esta unidad,
+        // NINGUNO puede llevar la etiqueta. La IA ya se mandó una vez marcando como
+        // "del profe" un caso que armó con números de una lámina de teoría.
+        if(!String(nodo.ejercicios||'').trim()) buenos.forEach(e=>{ e.origen='propio'; });
         d.contenido[nid]={ejercicios:buenos};
       }else{
         // UN SOLO PEDIDO genera la lección Y el quiz de toda la unidad (ahorra cuota)
