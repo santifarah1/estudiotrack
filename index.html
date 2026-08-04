@@ -326,6 +326,35 @@
   @media(hover:none){ .punto .exp-btn{opacity:1} }
   .punto .exp-btn:hover{background:var(--acento);border-color:var(--acento);color:var(--tinta)}
   .punto .exp-btn:disabled{opacity:.5;cursor:default}
+  /* --- práctica (ejercicios con cuentas) --- */
+  .ejercicio{border:1.5px solid var(--borde);border-radius:14px;padding:14px 15px;margin:14px 0;background:var(--carta)}
+  .ej-num{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--tenue);margin-bottom:6px}
+  .ej-enunciado{margin:0 0 10px;font-size:15px;line-height:1.6}
+  .ej-datos{display:flex;flex-wrap:wrap;gap:6px 16px;background:var(--papel);border:1px solid var(--borde);border-radius:10px;padding:9px 12px;font-size:13.5px;margin-bottom:12px}
+  .ej-datos span{white-space:nowrap}
+  .ej-item{border-top:1px dashed var(--borde);padding-top:11px;margin-top:11px}
+  .ej-item:first-of-type{border-top:0;margin-top:0}
+  .ej-preg{font-size:14.5px;line-height:1.55;margin-bottom:8px}
+  .ej-fila{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .ej-fila input{flex:1 1 130px;min-width:110px;padding:9px 11px;border:1.5px solid var(--borde);border-radius:10px;font-size:15px;font-family:inherit}
+  .ej-uni{font-size:13.5px;color:var(--tenue)}
+  .ej-btn{background:none;border:1.5px solid var(--borde);color:var(--tenue);border-radius:999px;padding:6px 13px;font-size:13px;font-family:inherit;cursor:pointer}
+  .ej-btn:hover:not(:disabled){border-color:var(--tinta);color:var(--tinta)}
+  .ej-btn:disabled{opacity:.5;cursor:default}
+  .ej-btn.principal{border-color:var(--tinta);color:var(--tinta);font-weight:600}
+  .ej-fb{margin-top:9px}
+  .ej-veredicto{border-radius:10px;padding:9px 12px;font-size:14px;line-height:1.55}
+  .ej-veredicto.bien{background:var(--aprobado-claro);border:1.5px solid var(--aprobado);color:var(--aprobado)}
+  .ej-veredicto.mal{background:var(--error-claro);border:1.5px solid var(--error);color:var(--error)}
+  .ej-veredicto.arrastre{background:var(--papel);border:1.5px solid var(--resaltador)}
+  .ej-pasos{margin-top:9px;background:var(--papel);border:1px solid var(--borde);border-radius:10px;padding:10px 12px}
+  .ej-pasos .pt{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--tenue);margin-bottom:6px}
+  .ej-paso{font-size:13.5px;line-height:1.6;margin:5px 0}
+  .ej-paso .cuenta{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:var(--tenue);margin-top:2px}
+  .ej-final{margin-top:8px;font-size:15px;font-weight:700}
+  .ej-txt{width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--borde);border-radius:10px;font-size:14px;font-family:inherit;line-height:1.5;resize:vertical}
+  .ej-modelo{background:var(--papel);border:1.5px solid var(--borde);border-radius:10px;padding:11px 13px;font-size:14px;line-height:1.6;margin-top:9px}
+  .ej-modelo strong{display:block;margin-bottom:4px;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--tenue)}
   .exp-caja{background:#EEF3FF;border:1.5px solid #C3D4F5;border-radius:12px;padding:13px 15px;margin:8px 0 4px 26px;font-size:14px;line-height:1.6}
   .exp-caja strong{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#3D5A99;margin-bottom:6px}
   .exp-caja .ex-mas{margin-top:10px;font-style:italic;color:#41538C}
@@ -542,7 +571,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.07.21a';
+const APP_VERSION = '2026.08.04a';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1431,18 +1460,34 @@ Cada unidad tiene que tratar UN solo tema que se pueda explicar bien en una lecc
 - BIEN: "Maíz" una unidad, "Arroz" otra, "Soja" otra, "Girasol" otra. Cada cultivo o tema grande, su propia unidad.
 Si dos temas tienen tecnologías, datos o procesos diferentes, van en unidades SEPARADAS. Es mejor tener muchas unidades chicas y enfocadas que pocas unidades que mezclan todo: así la lección cubre bien el tema y las preguntas no se van a cosas que no se explicaron.
 
-Dividí el material en tantas unidades como haga falta para que cada una sea UN tema bien acotado (típicamente entre 6 y 15, pero si el material lo pide pueden ser más). Ordenalas de forma lógica para estudiar. Cada unidad DEBE tener exactamente 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
+Dividí el material en tantas unidades como haga falta para que cada una sea UN tema bien acotado (típicamente entre 6 y 15, pero si el material lo pide pueden ser más). Ordenalas de forma lógica para estudiar. Cada unidad DEBE tener al menos 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
+
+🧮 NODO DE PRÁCTICA (opcional, unidad por unidad): si el material de esa unidad tiene cálculos, fórmulas, costos, superficies, dosis, densidades, porcentajes aplicados o ejercicios numéricos, agregá un TERCER nodo tipo "practica" DESPUÉS del quiz. Si la unidad es puramente conceptual (definiciones, historia, clasificaciones, ventajas y desventajas), NO le pongas nodo de práctica: dejala con 2 nodos. Es normal y esperable que en una misma materia algunas unidades tengan práctica y otras no. La "Recta final" nunca lleva práctica.
 
 Respondé SOLO con este JSON (sin texto antes ni después). Agregá tantas unidades como haga falta para que cada una sea UN tema acotado (normalmente 6 a 15, más la Recta final). Antes mezclabas temas para que entraran pocas unidades: NO lo hagas, preferí más unidades y más chicas:
 {"unidades":[
 {"titulo":"Nombre del tema 1","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Nombre del tema 2","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
-{"titulo":"Nombre del tema 3","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
+{"titulo":"Nombre del tema 3 (este SÍ tiene cuentas)","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."},{"tipo":"practica","titulo":"Ejercicios de ...","temas":"qué se calcula acá"}]},
 {"titulo":"Nombre del tema 4","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Recta final","nodos":[{"tipo":"simulacro","titulo":"Simulacro de examen","temas":"todo"}]}
 ]}
 Títulos de máx 6 palabras, "temas" de máx 15 palabras.`;
 }
+// Normaliza los tipos de nodo que devuelve la IA (mayúsculas, acentos, sinónimos).
+// Un tipo desconocido rompería abrirNodo, así que se cae a "quiz".
+function normalizarPlan(p){
+  const mapa={leccion:'leccion','lección':'leccion',teoria:'leccion','teoría':'leccion',
+    quiz:'quiz',preguntas:'quiz',cuestionario:'quiz',
+    practica:'practica','práctica':'practica',practico:'practica','práctico':'practica',
+    ejercicios:'practica',ejercicio:'practica',
+    simulacro:'simulacro',examen:'simulacro',final:'simulacro'};
+  ((p&&p.unidades)||[]).forEach(u=>{
+    (u.nodos||[]).forEach(n=>{ n.tipo = mapa[String(n.tipo||'').trim().toLowerCase()] || 'quiz'; });
+  });
+  return p;
+}
+
 function pLeccion(m, apuntes, nodo){
   return `Sos un tutor universitario argentino (voseo, tono directo, sin vueltas). Materia: "${m.nombre}".
 Apuntes del estudiante:
@@ -1507,6 +1552,45 @@ Respondé SOLO con este JSON (sin markdown):
   {"tipo":"abierta","q":"...","clave":["punto que la respuesta DEBE mencionar","otro punto clave"],"modelo":"respuesta ideal en 2-3 oraciones"}`:''}
 ]}}
 (el array "preguntas" tiene que traer exactamente 15)`;
+}
+
+// Ejercicios prácticos de una unidad. La IA plantea, el JS calcula.
+function pPractica(m, apuntes, unidad, leccionTxt){
+  const nodo=unidad.nodos.find(n=>n.tipo==='practica')||{titulo:unidad.titulo,temas:unidad.titulo};
+  return `Sos un profesor universitario argentino de "${m.nombre}" armando la guía de ejercicios de la unidad "${unidad.titulo}".
+
+Apuntes del estudiante:
+---
+${recortar(apuntes)}
+---
+${leccionTxt?`\nLo que el estudiante YA estudió en esta unidad:\n---\n${leccionTxt.slice(0,4000)}\n---\n`:''}
+Tema de la práctica: "${nodo.titulo}" (${nodo.temas||unidad.titulo}).
+
+⛔ REGLA CENTRAL — VOS NO HACÉS LAS CUENTAS:
+No resuelvas nada de aritmética. Escribí el PLANTEO como fórmulas y la app las va a calcular sola. Vos ponés los datos y la fórmula; el número exacto lo saca el programa. Esto es obligatorio: un número mal sumado le arruina el estudio al estudiante.
+
+Generá 3 a 5 ejercicios. Reglas:
+1) SALEN DE LOS APUNTES. Si los apuntes traen ejercicios del profe, imitá ese estilo, ese tipo de cuenta y ese nivel: son los que le van a tomar. Usá los valores de referencia que aparecen en el material (m² por animal, cm de comedero, precios, dosis, porcentajes, etc.).
+2) Cada ejercicio tiene un ENUNCIADO con contexto realista y una lista de DATOS. Cada dato lleva un "nombre" corto en minúscula sin espacios ni tildes (ej: superficie, m2_animal, costo_tramo) que es el que vas a usar en las fórmulas.
+3) Cada ejercicio se divide en ÍTEMS con id "a", "b", "c"… Un ítem puede usar el resultado de uno anterior escribiendo su id en la fórmula (ej: "a * costo_tramo").
+4) Ítems numéricos (tipo "numerico"): "pasos" es la resolución paso a paso. Cada paso tiene "texto" (qué se hace y POR QUÉ, en criollo, 1 oración) y "expr" (la fórmula). El resultado del ítem es el valor del ÚLTIMO paso.
+   - En "expr" solo podés usar: nombres de datos, ids de ítems anteriores, números, + - * / ^ ( ) y las funciones redondear(), techo(), piso(), abs(), raiz(), min(), max().
+   - NADA de texto, unidades ni comentarios dentro de "expr". Los números van con punto decimal (2.5, no 2,5).
+   - Si un paso define un valor intermedio que vas a reusar, ponele "nombre".
+   - "unidad" (cabezas, m, USD, kg/día…) y "decimales" (0 para cosas contables como cabezas o tramos).
+   - "resultadoIA": tu estimación del resultado. La app la usa solo para detectar planteos rotos; el número que se muestra es el que calcula ella.
+5) Ítems conceptuales (tipo "concepto"): las preguntas de análisis que acompañan a la cuenta ("¿qué implica esto para la escala del negocio?", "¿qué perfil de riesgo busca?"). NO llevan pasos: llevan "modelo", una respuesta modelo de 2 a 4 oraciones que conecte el número con la decisión de manejo. Poné uno cuando el tema lo pida, no en todos.
+6) Cada ejercicio DEBE tener al menos un ítem numérico. Variá el tipo de cuenta entre ejercicios (dimensionamiento, costos, comparación de alternativas, período de repago, eficiencia).
+
+Respondé SOLO con este JSON (sin markdown):
+{"ejercicios":[
+ {"enunciado":"Un inversor dispone de 2 hectáreas (20.000 m²) netas de engorde…",
+  "datos":[{"nombre":"superficie","etiqueta":"Superficie neta","valor":20000,"unidad":"m²"},{"nombre":"m2_animal","etiqueta":"Espacio por animal","valor":16,"unidad":"m²/cab"}],
+  "items":[
+   {"id":"a","tipo":"numerico","pregunta":"¿Cuál es la capacidad máxima instantánea?","pasos":[{"texto":"La capacidad sale de repartir la superficie disponible entre lo que ocupa cada animal.","expr":"superficie / m2_animal"}],"unidad":"cabezas","decimales":0,"resultadoIA":1250},
+   {"id":"b","tipo":"concepto","pregunta":"¿Qué impacto tiene esta diferencia en la escala del negocio?","modelo":"…"}
+  ]}
+]}`;
 }
 
 // Decide cuántas preguntas abiertas lleva un lote según el estilo de la materia
@@ -1718,10 +1802,192 @@ function pintarLista(lista, contId, repintar){
 function pintarArchivos(){ pintarLista(archivosSubidos, 'lista-archivos', pintarArchivos); }
 function pintarParciales(){ pintarLista(parcialesSubidos, 'lista-parciales', pintarParciales); }
 
+/* ================= PRÁCTICA: motor de cuentas =================
+   Regla de oro: la IA NO calcula. Devuelve el PLANTEO (fórmulas) y el número
+   lo saca el JS. La IA se equivoca planteando mucho menos que sumando, y el
+   planteo es justo lo que se evalúa en un parcial. */
+
+// Lee el número que escribió el estudiante. Devuelve TODAS las lecturas posibles:
+// en Argentina "1.250" es mil doscientos cincuenta y "18,5" es dieciocho y medio,
+// pero mucha gente escribe al revés. Si CUALQUIER lectura da bien, vale.
+function lecturasNumero(txt){
+  if(txt===null||txt===undefined) return [];
+  let s=String(txt).trim().replace(/[^\d.,\-]/g,'');   // saca $, kg, m², USD, espacios…
+  if(!s) return [];
+  const neg=s[0]==='-';
+  s=s.replace(/-/g,'');
+  if(!/\d/.test(s)) return [];
+  const out=[];
+  const push=v=>{ if(isFinite(v)&&out.indexOf(v)===-1) out.push(neg?-v:v); };
+  // El separador solo puede ser de MILES si agrupa de a 3 dígitos (1.250, 19.630).
+  // Así "18,5" nunca se lee como 185: un error de x10 tiene que contar como error.
+  const miles=sep=>new RegExp('^\\d{1,3}(\\'+sep+'\\d{3})+$').test(s);
+  const hayP=s.indexOf('.')>=0, hayC=s.indexOf(',')>=0;
+  if(hayP&&hayC){
+    const dec = s.lastIndexOf('.')>s.lastIndexOf(',') ? '.' : ',';
+    const mil = dec==='.' ? ',' : '.';
+    push(parseFloat(s.split(mil).join('').replace(dec,'.')));
+  }else if(hayC){
+    push(parseFloat(s.replace(/,/g,'.')));                    // coma decimal (lo normal acá)
+    if(miles(',')) push(parseFloat(s.replace(/,/g,'')));      // coma de miles (costumbre yanqui)
+  }else if(hayP){
+    push(parseFloat(s));                                      // punto decimal
+    if(miles('.')) push(parseFloat(s.replace(/\./g,'')));     // punto de miles (lo normal acá)
+  }else{
+    push(parseFloat(s));
+  }
+  return out.filter(v=>isFinite(v));
+}
+
+function fmtNum(v, dec){
+  if(!isFinite(v)) return '—';
+  const d=(dec===0||dec>0)?dec:(Math.abs(v)>=100||Math.abs(v-Math.round(v))<1e-9?0:2);
+  try{ return v.toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+  catch(e){ return String(Math.round(v*100)/100); }
+}
+
+// Evaluador propio (nada de eval): números, datos por nombre, + - * / ^ %,
+// paréntesis y un puñado de funciones. Cualquier otra cosa tira error y el
+// ejercicio se descarta antes de mostrarse.
+function fnPractica(nom, a){
+  const f=String(nom).toLowerCase();
+  if(f==='redondear') return a.length>1 ? Math.round(a[0]*Math.pow(10,a[1]))/Math.pow(10,a[1]) : Math.round(a[0]);
+  if(f==='techo'||f==='ceil') return Math.ceil(a[0]);
+  if(f==='piso'||f==='floor'||f==='entero') return Math.floor(a[0]);
+  if(f==='abs') return Math.abs(a[0]);
+  if(f==='raiz'||f==='sqrt') return Math.sqrt(a[0]);
+  if(f==='min') return Math.min.apply(null,a);
+  if(f==='max') return Math.max.apply(null,a);
+  throw new Error('Función no permitida: '+nom);
+}
+function evalExpr(expr, scope){
+  const s=String(expr==null?'':expr);
+  let i=0;
+  const esp=()=>{ while(i<s.length && /\s/.test(s[i])) i++; };
+  function primaria(){
+    esp();
+    if(s[i]==='('){ i++; const v=suma(); esp(); if(s[i]!==')') throw new Error('falta un paréntesis'); i++; return v; }
+    if(s[i]==='-'){ i++; return -primaria(); }
+    if(s[i]==='+'){ i++; return primaria(); }
+    const num=/^\d+(?:\.\d+)?/.exec(s.slice(i));
+    if(num){ i+=num[0].length; return parseFloat(num[0]); }
+    const id=/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ_][A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9_]*/.exec(s.slice(i));
+    if(id){
+      i+=id[0].length; esp();
+      if(s[i]==='('){
+        i++; const args=[]; esp();
+        if(s[i]!==')'){ args.push(suma()); esp(); while(s[i]===','||s[i]===';'){ i++; args.push(suma()); esp(); } }
+        if(s[i]!==')') throw new Error('falta cerrar '+id[0]);
+        i++; return fnPractica(id[0], args);
+      }
+      let clave=null;
+      for(const k in scope){ if(k.toLowerCase()===id[0].toLowerCase()){ clave=k; break; } }
+      if(clave===null) throw new Error('dato desconocido: '+id[0]);
+      const v=Number(scope[clave]);
+      if(!isFinite(v)) throw new Error('dato sin valor: '+id[0]);
+      return v;
+    }
+    throw new Error('fórmula ilegible');
+  }
+  function potencia(){ const v=primaria(); esp(); if(s[i]==='^'){ i++; return Math.pow(v,potencia()); } return v; }
+  function producto(){ let v=potencia(); for(;;){ esp();
+    if(s[i]==='*'){ i++; v*=potencia(); }
+    else if(s[i]==='/'){ i++; const d=potencia(); if(d===0) throw new Error('división por cero'); v/=d; }
+    else if(s[i]==='%'){ i++; const d=potencia(); if(d===0) throw new Error('división por cero'); v=v%d; }
+    else return v; } }
+  function suma(){ let v=producto(); for(;;){ esp();
+    if(s[i]==='+'){ i++; v+=producto(); }
+    else if(s[i]==='-'){ i++; v-=producto(); }
+    else return v; } }
+  const r=suma(); esp();
+  if(i<s.length) throw new Error('sobra algo en la fórmula');
+  if(!isFinite(r)) throw new Error('la cuenta no da un número');
+  return r;
+}
+
+// "superficie / m2_animal" -> "20.000 / 16": la cuenta como la escribiría un profe
+// en el pizarrón. Los nombres de función (techo, redondear…) se dejan como están.
+function conNumeros(expr, scope){
+  try{
+    return String(expr).replace(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ_][A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9_]*(\s*\()?/g,(m,par)=>{
+      if(par) return m;                          // es una función: no se toca
+      let clave=null;
+      for(const k in scope){ if(k.toLowerCase()===m.toLowerCase()){ clave=k; break; } }
+      if(clave===null) return m;
+      // sin ceros de relleno: en la fórmula queda "2,5" y no "2,50"
+      return fmtNum(Number(scope[clave]), null).replace(/,(\d*?)0+$/, (x,g)=>g?','+g:'');
+    });
+  }catch(e){ return String(expr); }
+}
+
+// Resuelve todos los ítems numéricos de un ejercicio.
+// `sust` = respuestas del estudiante {a:1300}: sirve para el ARRASTRE DE ERROR
+// (si el a) te dio mal, el b) se corrige con TU número, como corrige un profe).
+function resolverEjercicio(ej, sust){
+  const scope={};
+  (ej.datos||[]).forEach(dt=>{ if(dt&&dt.nombre!=null) scope[String(dt.nombre)]=Number(dt.valor); });
+  const salida={};
+  (ej.items||[]).forEach(it=>{
+    if(!it||it.tipo==='concepto') return;
+    const pasos=[]; let ultimo=null;
+    (it.pasos||[]).forEach(p=>{
+      const v=evalExpr(p.expr, scope);
+      pasos.push({texto:p.texto||'', expr:p.expr, cuenta:conNumeros(p.expr, scope), valor:v});
+      if(p.nombre) scope[String(p.nombre)]=v;
+      ultimo=v;
+    });
+    if(ultimo===null) throw new Error('ítem sin pasos');
+    salida[it.id]={valor:ultimo, pasos};
+    // los ítems que vienen después usan el valor del estudiante si lo hay
+    const suyo=(sust&&isFinite(sust[it.id]))?Number(sust[it.id]):ultimo;
+    scope[String(it.id)]=suyo;
+  });
+  return salida;
+}
+
+// Valida y normaliza un ejercicio recién salido de la IA. Devuelve null si no sirve
+// (y entonces no se le muestra nunca al estudiante).
+function prepararEjercicio(ej){
+  try{
+    if(!ej||!ej.enunciado||!Array.isArray(ej.items)) return null;
+    const limpio={
+      enunciado:String(ej.enunciado),
+      datos:(ej.datos||[]).filter(dt=>dt&&dt.nombre&&isFinite(Number(dt.valor)))
+        .map(dt=>({nombre:String(dt.nombre),etiqueta:String(dt.etiqueta||dt.nombre),valor:Number(dt.valor),unidad:String(dt.unidad||'')})),
+      items:ej.items.filter(it=>it&&it.id&&it.pregunta).map(it=>({
+        id:String(it.id),
+        tipo:(it.tipo==='concepto')?'concepto':'numerico',
+        pregunta:String(it.pregunta),
+        pasos:(it.pasos||[]).filter(p=>p&&p.expr).map(p=>({texto:String(p.texto||''),expr:String(p.expr),nombre:p.nombre?String(p.nombre):''})),
+        unidad:String(it.unidad||''),
+        decimales:isFinite(Number(it.decimales))?Math.max(0,Math.min(4,Math.round(Number(it.decimales)))):null,
+        modelo:String(it.modelo||''),
+        resultadoIA:isFinite(Number(it.resultadoIA))?Number(it.resultadoIA):null
+      }))
+    };
+    limpio.items=limpio.items.filter(it=> it.tipo==='concepto' ? !!it.modelo : it.pasos.length>0 );
+    if(!limpio.items.some(it=>it.tipo==='numerico')) return null;   // sin cuentas no es práctica
+    const calc=resolverEjercicio(limpio);   // si una fórmula no cierra, tira y se descarta
+    // Cruce contra el número que dijo la IA. Diferencias chicas = la IA se comió un
+    // decimal (manda el JS). Diferencias enormes = el planteo está roto: se tira.
+    const roto=limpio.items.some(it=>{
+      if(it.tipo!=='numerico'||it.resultadoIA===null) return false;
+      const mio=calc[it.id]?calc[it.id].valor:NaN;
+      if(!isFinite(mio)) return true;
+      const base=Math.max(Math.abs(mio),Math.abs(it.resultadoIA),1e-9);
+      return Math.abs(mio-it.resultadoIA)/base > 0.5;
+    });
+    return roto?null:limpio;
+  }catch(e){ return null; }
+}
+
+// Tolerancia: 1% relativo (redondear no es equivocarse), con piso para números chicos.
+function tolerancia(v){ return Math.max(Math.abs(v)*0.01, 0.005); }
+
 /* ---------- helpers ---------- */
 function esc(s){const d=document.createElement('div');d.textContent=s??'';return d.innerHTML;}
-function iconoNodo(t){return t==='leccion'?'📖':t==='quiz'?'✏️':'🎯';}
-function nombreTipo(t){return t==='leccion'?'Lección':t==='quiz'?'Quiz':t==='repaso'?'Repaso':'Simulacro';}
+function iconoNodo(t){return t==='leccion'?'📖':t==='quiz'?'✏️':t==='practica'?'🧮':'🎯';}
+function nombreTipo(t){return t==='leccion'?'Lección':t==='quiz'?'Quiz':t==='practica'?'Práctica':t==='repaso'?'Repaso':'Simulacro';}
 function nodosPlanos(datos){
   const lista=[];
   datos.plan.unidades.forEach((u,ui)=>u.nodos.forEach((n,ni)=>lista.push({...n,id:`${ui}-${ni}`})));
@@ -1885,6 +2151,7 @@ function render(){
   else if(t==='generando')renderCargando(vista.msg);
   else if(t==='camino')renderCamino();
   else if(t==='leccion')renderLeccion();
+  else if(t==='practica')renderPractica();
   else if(t==='quiz')renderQuiz();
 }
 function iconoTema(){
@@ -3077,7 +3344,7 @@ function renderNueva(err){
       const m={id:'m'+Date.now(),nombre,fecha,objetivo,estilo,tieneParciales:!!parciales};
       let plan=null;
       for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
-        const p=await iaJSON(pPlan(m,apuntes),6144,true);
+        const p=normalizarPlan(await iaJSON(pPlan(m,apuntes),6144,true));
         const unidades=(p&&p.unidades)||[];
         const conNodos=unidades.filter(u=>u.nodos&&u.nodos.length);
         if(unidades.length>=3 && conNodos.length>=3){ plan=p; break; }
@@ -3127,7 +3394,7 @@ function caminoHTML(m,d){
       const ok=!!d.completados[id];
       const desbloq=repasoLibre||ok||planos.slice(0,idx).every(p=>d.completados[p.id]);
       const esActual=!repasoLibre&&actual&&actual.id===id;
-      const seleccionado=(vista.nid===id&&(vista.tipo==='leccion'||vista.tipo==='quiz'));
+      const seleccionado=(vista.nid===id&&(vista.tipo==='leccion'||vista.tipo==='quiz'||vista.tipo==='practica'));
       html+=`
         <button class="nodo ${ok?'ok':''} ${!desbloq?'bloq':''} ${esActual?'actual':''} ${seleccionado?'sel':''}" data-id="${id}" ${!desbloq?'disabled':''}>
           <span class="icono">${iconoNodo(n.tipo)}</span>
@@ -3240,7 +3507,7 @@ function wireCamino(m,d){
     vista={tipo:'generando', msg:'Rehaciendo el plan, separando bien los temas…'};
     render();
     try{
-      const plan=await iaJSON(pPlan(m, apuntes), 8192);
+      const plan=normalizarPlan(await iaJSON(pPlan(m, apuntes), 8192));
       if(!plan || !plan.unidades || !plan.unidades.length) throw new Error('El plan vino vacío. Reintentá.');
       const d2=datosMateria(m.id);
       d2.plan=plan;
@@ -3428,6 +3695,15 @@ async function abrirNodo(mid, nid, forzarNuevo){
         d.usadas[nid]=[(d.usadas[nid]||''),ok.map(p=>p.q).join(' | ')].filter(Boolean).join(' | ');
         // reemplazar el banco por el nuevo y volver a la serie 1
         d.contenido[nid]={preguntas:ok, tanda:0};
+      }else if(nodo.tipo==='practica'){
+        // Ejercicios de la unidad. Un pedido aparte: el de lección+quiz ya viene cargado
+        // y meterle 5 ejercicios más lo haría reventar por largo.
+        apuntesTxt = apuntesTxt ?? await apuntesDe(d);
+        const lecTxt=leccionContexto(d, ui)||'';
+        const cont=await iaJSON(pPractica(m,apuntesTxt,unidad,lecTxt),8192,false,forzarNuevo?0.9:0.5);
+        const buenos=(cont.ejercicios||[]).map(prepararEjercicio).filter(Boolean);
+        if(!buenos.length) throw new Error('Los ejercicios vinieron con las fórmulas rotas. Probá de nuevo.');
+        d.contenido[nid]={ejercicios:buenos};
       }else{
         // UN SOLO PEDIDO genera la lección Y el quiz de toda la unidad (ahorra cuota)
         apuntesTxt = apuntesTxt ?? await apuntesDe(d);
@@ -3456,6 +3732,21 @@ async function abrirNodo(mid, nid, forzarNuevo){
       }
       guardarMateria(mid,d);
     }catch(e){
+      // La práctica es un nodo más del camino: si no se puede generar, BLOQUEA el avance.
+      // Antes que dejarlo trabado, se ofrece saltearla.
+      if(nodo.tipo==='practica'){
+        const saltear=confirm(
+          'No pude armar los ejercicios de esta unidad.\n\n'+mensajeError(e)+
+          '\n\n¿Querés saltear la práctica y seguir el camino?\n\n'+
+          'Aceptar = saltearla (podés volver cuando quieras)\nCancelar = volver e intentar más tarde'
+        );
+        if(saltear){
+          const d2=datosMateria(mid);
+          if(!d2.completados[nid]){ d2.completados[nid]=true; guardarMateria(mid,d2); }
+        }
+        vista={tipo:'camino',id:mid}; render();
+        return;
+      }
       // Falló generar preguntas nuevas. NO mentir mostrando las viejas como si fueran nuevas:
       // avisar con honestidad y dejar que el usuario elija.
       if(forzarNuevo && d.contenido[nid] && (d.contenido[nid].preguntas||[]).length){
@@ -3479,6 +3770,14 @@ async function abrirNodo(mid, nid, forzarNuevo){
   if(!c){ vista={tipo:'camino',id:mid}; render(); alert('No se generó el contenido de este nodo. Probá de nuevo.'); return; }
   if(nodo.tipo==='leccion'){
     vista={tipo:'leccion',mid,nid,nodo,contenido:c};
+  }else if(nodo.tipo==='practica'){
+    if(!(c.ejercicios||[]).length){
+      if(!forzarNuevo) return abrirNodo(mid,nid,true);
+      vista={tipo:'camino',id:mid}; render();
+      alert('Esta práctica quedó vacía. Probá de nuevo en un momento.');
+      return;
+    }
+    vista={tipo:'practica',mid,nid,nodo,contenido:c};
   }else{
     const buenas=limpiarPreguntas(c.preguntas);
     if(buenas.length<3){
@@ -3596,6 +3895,146 @@ function renderLeccion(){
         }
       };
     });
+    document.getElementById('listo').onclick=()=>{
+      let esNuevo=false;
+      if(!repasoLibre){
+        const d2=datosMateria(vista.mid);
+        if(!d2.completados[vista.nid]){
+          d2.completados[vista.nid]=true;
+          guardarMateria(vista.mid,d2);
+          marcarRacha();
+          esNuevo=true;
+        }
+      }
+      vista={tipo:'camino',id:vista.mid};render();
+      if(esNuevo) chequearLogros({esLeccion:true});
+    };
+  });
+}
+
+/* ---------- práctica ---------- */
+function renderPractica(){
+  const ejs=(vista.contenido&&vista.contenido.ejercicios)||[];
+  const d=datosMateria(vista.mid);
+  const calcs=[];
+  let cuerpo='';
+  ejs.forEach((ej,ei)=>{
+    let calc=null;
+    try{ calc=resolverEjercicio(ej); }catch(e){ calc=null; }
+    calcs[ei]=calc;
+    if(!calc) return;   // ejercicio roto: no se muestra
+    cuerpo+=`<div class="ejercicio">
+      <div class="ej-num">Ejercicio ${ei+1}</div>
+      <p class="ej-enunciado">${esc(ej.enunciado)}</p>
+      ${(ej.datos||[]).length?`<div class="ej-datos">${ej.datos.map(dt=>
+        `<span><b>${esc(dt.etiqueta)}:</b> ${fmtNum(dt.valor,null)}${dt.unidad?' '+esc(dt.unidad):''}</span>`).join('')}</div>`:''}
+      ${ej.items.map(it=>{
+        const k=`${ei}-${it.id}`;
+        if(it.tipo==='concepto'){
+          return `<div class="ej-item">
+            <div class="ej-preg"><b>${esc(it.id)})</b> ${esc(it.pregunta)}</div>
+            <textarea class="ej-txt" rows="3" placeholder="Escribí tu respuesta y después compará (esta no se corrige)"></textarea>
+            <div class="ej-fb" id="fb-${k}"><button class="ej-btn ver-modelo" data-k="${k}" data-ej="${ei}" data-it="${esc(it.id)}">Ver respuesta modelo</button></div>
+          </div>`;
+        }
+        return `<div class="ej-item">
+          <div class="ej-preg"><b>${esc(it.id)})</b> ${esc(it.pregunta)}</div>
+          <div class="ej-fila">
+            <input type="text" inputmode="decimal" data-k="${k}" placeholder="Tu resultado">
+            ${it.unidad?`<span class="ej-uni">${esc(it.unidad)}</span>`:''}
+            <button class="ej-btn principal verificar" data-k="${k}" data-ej="${ei}" data-it="${esc(it.id)}">Verificar</button>
+          </div>
+          <div class="ej-fb" id="fb-${k}"></div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  });
+  if(!cuerpo) cuerpo='<p class="hint">Los ejercicios de esta unidad no se pudieron armar. Probá con «Otros ejercicios».</p>';
+
+  const html=`
+    <button class="volver" id="volver">← Volver al camino</button>
+    <div class="card contenido">
+      <h2>🧮 ${esc(vista.nodo.titulo)}</h2>
+      <p class="hint">Resolvé primero, después mirá la resolución. Usá coma para los decimales (18,5). Se acepta un margen del 1%: redondear no es equivocarse.</p>
+      ${cuerpo}
+      <button class="btn" id="listo">${repasoLibre?'Listo (repaso)':(d.completados[vista.nid]?'Volver al camino':'Práctica terminada ✓')}</button>
+      <button class="ej-btn" id="otros" style="margin-top:10px">🔄 Otros ejercicios (gasta cuota)</button>
+    </div>`;
+
+  pintarContenido(html, ()=>{
+    const bv=document.getElementById('volver');
+    if(bv) bv.onclick=()=>{vista={tipo:'camino',id:vista.mid};render();};
+
+    // Respuestas que el estudiante ya puso en los ítems ANTERIORES del mismo
+    // ejercicio: sirven para detectar arrastre de error.
+    const previas=(ei,ej,hasta)=>{
+      const out={};
+      for(const it of ej.items){
+        if(it.id===hasta) break;
+        if(it.tipo!=='numerico') continue;
+        const inp=$app.querySelector(`input[data-k="${ei}-${it.id}"]`);
+        if(!inp) continue;
+        const L=lecturasNumero(inp.value);
+        if(L.length) out[it.id]=L[0];
+      }
+      return out;
+    };
+
+    $app.querySelectorAll('.verificar').forEach(btn=>{
+      btn.onclick=()=>{
+        const ei=+btn.dataset.ej, itId=btn.dataset.it, k=btn.dataset.k;
+        const ej=ejs[ei], calc=calcs[ei];
+        const it=ej.items.find(x=>x.id===itId);
+        const caja=document.getElementById('fb-'+k);
+        const inp=$app.querySelector(`input[data-k="${k}"]`);
+        if(!it||!calc||!caja||!inp) return;
+        const correcto=calc[it.id].valor;
+        const L=lecturasNumero(inp.value);
+        if(!L.length){ caja.innerHTML=`<div class="ej-veredicto mal">Escribí un número para poder corregirte.</div>`; return; }
+        const tol=tolerancia(correcto);
+        let estado = L.some(v=>Math.abs(v-correcto)<=tol) ? 'bien' : 'mal';
+        let arrastrado=null;
+        if(estado==='mal'){
+          // ¿Planteó bien pero arrastró un error de un ítem anterior?
+          try{
+            const alt=resolverEjercicio(ej, previas(ei,ej,it.id));
+            const va=alt[it.id]?alt[it.id].valor:NaN;
+            if(isFinite(va) && Math.abs(va-correcto)>tol && L.some(v=>Math.abs(v-va)<=tolerancia(va))){
+              estado='arrastre'; arrastrado=va;
+            }
+          }catch(e){}
+        }
+        const dec=it.decimales, uni=it.unidad?' '+esc(it.unidad):'';
+        const veredicto =
+          estado==='bien' ? `<div class="ej-veredicto bien">✓ Bien. ${fmtNum(correcto,dec)}${uni}.</div>`
+          : estado==='arrastre' ? `<div class="ej-veredicto arrastre">➜ <strong>El planteo está bien</strong>, pero arrastraste un error de un ítem anterior. Con tus números daba ${fmtNum(arrastrado,dec)}${uni}; con los correctos da <strong>${fmtNum(correcto,dec)}${uni}</strong>.</div>`
+          : `<div class="ej-veredicto mal">✗ No es. El resultado es <strong>${fmtNum(correcto,dec)}${uni}</strong>.</div>`;
+        const pasos=`<div class="ej-pasos">
+          <div class="pt">Resolución paso a paso</div>
+          ${calc[it.id].pasos.map((p,pi)=>`<div class="ej-paso">${pi+1}. ${esc(p.texto)}<span class="cuenta">${esc(p.cuenta||p.expr)} = ${fmtNum(p.valor,null)}</span></div>`).join('')}
+          <div class="ej-final">= ${fmtNum(correcto,dec)}${uni}</div>
+        </div>`;
+        caja.innerHTML=veredicto+pasos;
+        inp.disabled=true; btn.remove();
+      };
+    });
+
+    $app.querySelectorAll('.ver-modelo').forEach(btn=>{
+      btn.onclick=()=>{
+        const ei=+btn.dataset.ej, itId=btn.dataset.it;
+        const it=(ejs[ei].items||[]).find(x=>x.id===itId);
+        const caja=document.getElementById('fb-'+btn.dataset.k);
+        if(!it||!caja) return;
+        caja.innerHTML=`<div class="ej-modelo"><strong>Respuesta modelo</strong>${esc(it.modelo)}</div>`;
+      };
+    });
+
+    const otros=document.getElementById('otros');
+    if(otros) otros.onclick=()=>{
+      if(confirm('Genero ejercicios nuevos para esta unidad.\n\nGasta un pedido de tu cuota de Gemini y reemplaza los actuales. ¿Sigo?'))
+        abrirNodo(vista.mid, vista.nid, true);
+    };
+
     document.getElementById('listo').onclick=()=>{
       let esNuevo=false;
       if(!repasoLibre){
