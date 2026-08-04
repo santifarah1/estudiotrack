@@ -329,6 +329,7 @@
   /* --- práctica (ejercicios con cuentas) --- */
   .ejercicio{border:1.5px solid var(--borde);border-radius:14px;padding:14px 15px;margin:14px 0;background:var(--carta)}
   .ej-num{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--tenue);margin-bottom:6px}
+  .ej-tag{display:inline-block;margin-left:6px;padding:2px 9px;border-radius:999px;background:var(--aprobado-claro);color:var(--aprobado);border:1px solid var(--aprobado);font-size:10.5px;letter-spacing:.02em;word-spacing:.18em;vertical-align:middle}
   .ej-enunciado{margin:0 0 10px;font-size:15px;line-height:1.6}
   .ej-datos{display:flex;flex-wrap:wrap;gap:6px 16px;background:var(--papel);border:1px solid var(--borde);border-radius:10px;padding:9px 12px;font-size:13.5px;margin-bottom:12px}
   .ej-datos span{white-space:nowrap}
@@ -571,7 +572,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.04a';
+const APP_VERSION = '2026.08.04b';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1462,13 +1463,22 @@ Si dos temas tienen tecnologías, datos o procesos diferentes, van en unidades S
 
 Dividí el material en tantas unidades como haga falta para que cada una sea UN tema bien acotado (típicamente entre 6 y 15, pero si el material lo pide pueden ser más). Ordenalas de forma lógica para estudiar. Cada unidad DEBE tener al menos 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
 
-🧮 NODO DE PRÁCTICA (opcional, unidad por unidad): si el material de esa unidad tiene cálculos, fórmulas, costos, superficies, dosis, densidades, porcentajes aplicados o ejercicios numéricos, agregá un TERCER nodo tipo "practica" DESPUÉS del quiz. Si la unidad es puramente conceptual (definiciones, historia, clasificaciones, ventajas y desventajas), NO le pongas nodo de práctica: dejala con 2 nodos. Es normal y esperable que en una misma materia algunas unidades tengan práctica y otras no. La "Recta final" nunca lleva práctica.
+📐 PASO PREVIO OBLIGATORIO — BUSCÁ LOS EJERCICIOS DEL PROFE:
+Muchísimo material universitario trae una tanda de ejercicios prácticos, casi siempre AL FINAL, después de toda la teoría. Antes de armar el plan, recorré el material buscando esa sección: enunciados con datos numéricos, consignas tipo "calcule", "determine", "estime", "¿cuántos…?", "¿cuánto cuesta…?", ítems a) b) c).
+Para CADA ejercicio que encuentres, identificá DE QUÉ TEMA es — por los datos que usa y por lo que pide, no por dónde está ubicado. Los ejercicios suelen estar todos juntos al final, pero cada uno pertenece al tema del que habla: uno sobre metros lineales de comedero va a la unidad de instalaciones aunque esté en la última página; uno sobre alquilar corrales va a la unidad de modelos de negocio.
+
+🧮 NODO DE PRÁCTICA (unidad por unidad): una unidad lleva un TERCER nodo tipo "practica", DESPUÉS del quiz, si:
+  (a) le corresponde al menos uno de los ejercicios del profe que acabás de mapear, o
+  (b) su tema se resuelve con cuentas (superficies, costos, dosis, densidades, rendimientos, porcentajes aplicados).
+En el nodo "practica" agregá un campo "ejercicios" con la lista corta de los ejercicios del profe que van ahí (ej: "Ejercicio 2 (metros de comedero) y Ejercicio 5 (piso de barro vs hormigón)"). Si no hay ninguno del profe, poné "ejercicios":"" y listo.
+Si la unidad es puramente conceptual (definiciones, historia, clasificaciones, ventajas y desventajas) y no le toca ningún ejercicio, NO le pongas práctica: dejala con 2 nodos.
+⚠️ Si el material traía 5, 6 o 7 ejercicios, es imposible que todos sean del mismo tema: repartí el nodo de práctica entre VARIAS unidades. Que quede una sola unidad con práctica cuando había muchos ejercicios significa que no los buscaste bien. La "Recta final" nunca lleva práctica.
 
 Respondé SOLO con este JSON (sin texto antes ni después). Agregá tantas unidades como haga falta para que cada una sea UN tema acotado (normalmente 6 a 15, más la Recta final). Antes mezclabas temas para que entraran pocas unidades: NO lo hagas, preferí más unidades y más chicas:
 {"unidades":[
 {"titulo":"Nombre del tema 1","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Nombre del tema 2","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
-{"titulo":"Nombre del tema 3 (este SÍ tiene cuentas)","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."},{"tipo":"practica","titulo":"Ejercicios de ...","temas":"qué se calcula acá"}]},
+{"titulo":"Nombre del tema 3 (este SÍ tiene cuentas)","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."},{"tipo":"practica","titulo":"Ejercicios de ...","temas":"qué se calcula acá","ejercicios":"Ejercicio 2 (tema) y Ejercicio 5 (tema), o vacío si no hay del profe"}]},
 {"titulo":"Nombre del tema 4","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Recta final","nodos":[{"tipo":"simulacro","titulo":"Simulacro de examen","temas":"todo"}]}
 ]}
@@ -1565,12 +1575,20 @@ ${recortar(apuntes)}
 ---
 ${leccionTxt?`\nLo que el estudiante YA estudió en esta unidad:\n---\n${leccionTxt.slice(0,4000)}\n---\n`:''}
 Tema de la práctica: "${nodo.titulo}" (${nodo.temas||unidad.titulo}).
+${nodo.ejercicios?`\n⭐ Al armar el plan ya identifiqué qué ejercicios del profe le corresponden a esta unidad: ${nodo.ejercicios}\nBuscalos en los apuntes y usá ESOS.\n`:''}
 
 ⛔ REGLA CENTRAL — VOS NO HACÉS LAS CUENTAS:
 No resuelvas nada de aritmética. Escribí el PLANTEO como fórmulas y la app las va a calcular sola. Vos ponés los datos y la fórmula; el número exacto lo saca el programa. Esto es obligatorio: un número mal sumado le arruina el estudio al estudiante.
 
-Generá 3 a 5 ejercicios. Reglas:
-1) SALEN DE LOS APUNTES. Si los apuntes traen ejercicios del profe, imitá ese estilo, ese tipo de cuenta y ese nivel: son los que le van a tomar. Usá los valores de referencia que aparecen en el material (m² por animal, cm de comedero, precios, dosis, porcentajes, etc.).
+⭐ PRIORIDAD ABSOLUTA — LOS EJERCICIOS DEL PROFE:
+Si en los apuntes hay ejercicios ya escritos que corresponden a esta unidad, usá ESOS: mismo enunciado, mismos datos, mismos ítems a) b) c), mismo orden. No los reformules, no los "mejores", no les cambies los números. Son literalmente los que le van a tomar en el parcial. Tu trabajo con ellos es UNO SOLO: pasarlos a este formato JSON agregándoles el planteo. Marcalos con "origen":"profe".
+- Si un ejercicio del profe termina en una consigna de análisis o discusión que no se resuelve con números ("discuta el impacto…", "¿qué perfil de riesgo…?"), ese ítem va como tipo "concepto" con su respuesta modelo. No lo tires.
+- Si un ejercicio del profe toca varios temas, incluilo igual mientras el grueso sea de esta unidad.
+Recién DESPUÉS de haber pasado todos los del profe, si quedaron menos de 3, completá con ejercicios propios en el mismo estilo y marcalos "origen":"propio".
+Si esta unidad no tiene ningún ejercicio del profe, inventá 3 en el estilo del material, todos "origen":"propio".
+
+Generá entre 2 y 5 ejercicios en total (los del profe van primero y completos). Reglas:
+1) SALEN DE LOS APUNTES. Usá los valores de referencia que aparecen en el material (m² por animal, cm de comedero, precios, dosis, porcentajes, etc.), no valores inventados.
 2) Cada ejercicio tiene un ENUNCIADO con contexto realista y una lista de DATOS. Cada dato lleva un "nombre" corto en minúscula sin espacios ni tildes (ej: superficie, m2_animal, costo_tramo) que es el que vas a usar en las fórmulas.
 3) Cada ejercicio se divide en ÍTEMS con id "a", "b", "c"… Un ítem puede usar el resultado de uno anterior escribiendo su id en la fórmula (ej: "a * costo_tramo").
 4) Ítems numéricos (tipo "numerico"): "pasos" es la resolución paso a paso. Cada paso tiene "texto" (qué se hace y POR QUÉ, en criollo, 1 oración) y "expr" (la fórmula). El resultado del ítem es el valor del ÚLTIMO paso.
@@ -1580,11 +1598,12 @@ Generá 3 a 5 ejercicios. Reglas:
    - "unidad" (cabezas, m, USD, kg/día…) y "decimales" (0 para cosas contables como cabezas o tramos).
    - "resultadoIA": tu estimación del resultado. La app la usa solo para detectar planteos rotos; el número que se muestra es el que calcula ella.
 5) Ítems conceptuales (tipo "concepto"): las preguntas de análisis que acompañan a la cuenta ("¿qué implica esto para la escala del negocio?", "¿qué perfil de riesgo busca?"). NO llevan pasos: llevan "modelo", una respuesta modelo de 2 a 4 oraciones que conecte el número con la decisión de manejo. Poné uno cuando el tema lo pida, no en todos.
-6) Cada ejercicio DEBE tener al menos un ítem numérico. Variá el tipo de cuenta entre ejercicios (dimensionamiento, costos, comparación de alternativas, período de repago, eficiencia).
+6) Cada ejercicio DEBE tener al menos un ítem numérico. Si un ejercicio del profe fuera puramente conceptual, no lo pongas acá: eso va al quiz.
+7) "origen": "profe" si el ejercicio está textualmente en los apuntes, "propio" si lo inventaste vos. No mientas: si lo inventaste, va "propio".
 
 Respondé SOLO con este JSON (sin markdown):
 {"ejercicios":[
- {"enunciado":"Un inversor dispone de 2 hectáreas (20.000 m²) netas de engorde…",
+ {"origen":"profe","enunciado":"Un inversor dispone de 2 hectáreas (20.000 m²) netas de engorde…",
   "datos":[{"nombre":"superficie","etiqueta":"Superficie neta","valor":20000,"unidad":"m²"},{"nombre":"m2_animal","etiqueta":"Espacio por animal","valor":16,"unidad":"m²/cab"}],
   "items":[
    {"id":"a","tipo":"numerico","pregunta":"¿Cuál es la capacidad máxima instantánea?","pasos":[{"texto":"La capacidad sale de repartir la superficie disponible entre lo que ocupa cada animal.","expr":"superficie / m2_animal"}],"unidad":"cabezas","decimales":0,"resultadoIA":1250},
@@ -1952,6 +1971,7 @@ function prepararEjercicio(ej){
     if(!ej||!ej.enunciado||!Array.isArray(ej.items)) return null;
     const limpio={
       enunciado:String(ej.enunciado),
+      origen:(ej.origen==='profe')?'profe':'propio',
       datos:(ej.datos||[]).filter(dt=>dt&&dt.nombre&&isFinite(Number(dt.valor)))
         .map(dt=>({nombre:String(dt.nombre),etiqueta:String(dt.etiqueta||dt.nombre),valor:Number(dt.valor),unidad:String(dt.unidad||'')})),
       items:ej.items.filter(it=>it&&it.id&&it.pregunta).map(it=>({
@@ -3924,7 +3944,7 @@ function renderPractica(){
     calcs[ei]=calc;
     if(!calc) return;   // ejercicio roto: no se muestra
     cuerpo+=`<div class="ejercicio">
-      <div class="ej-num">Ejercicio ${ei+1}</div>
+      <div class="ej-num">Ejercicio ${ei+1}${ej.origen==='profe'?' <span class="ej-tag">del práctico del profe</span>':''}</div>
       <p class="ej-enunciado">${esc(ej.enunciado)}</p>
       ${(ej.datos||[]).length?`<div class="ej-datos">${ej.datos.map(dt=>
         `<span><b>${esc(dt.etiqueta)}:</b> ${fmtNum(dt.valor,null)}${dt.unidad?' '+esc(dt.unidad):''}</span>`).join('')}</div>`:''}
