@@ -328,6 +328,7 @@
   .punto .exp-btn:disabled{opacity:.5;cursor:default}
   /* --- práctica (ejercicios con cuentas) --- */
   .ejercicio{border:1.5px solid var(--borde);border-radius:14px;padding:14px 15px;margin:14px 0;background:var(--carta)}
+  .archivo .estado-a.recorte{color:var(--error);font-weight:600}
   .ej-num{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--tenue);margin-bottom:6px}
   .ej-tag{display:inline-block;margin-left:6px;padding:2px 9px;border-radius:999px;background:var(--aprobado-claro);color:var(--aprobado);border:1px solid var(--aprobado);font-size:10.5px;letter-spacing:.02em;word-spacing:.18em;vertical-align:middle}
   .ej-enunciado{margin:0 0 10px;font-size:15px;line-height:1.6}
@@ -572,7 +573,7 @@ migrarExplicaciones();
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.05b';
+const APP_VERSION = '2026.08.05c';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1776,17 +1777,23 @@ function leerComoBase64(file){
     r.readAsDataURL(file);
   });
 }
+// El tope estaba en 50 páginas y se recortaba EN SILENCIO. Un PPT de 61 diapositivas
+// pasado a PDF perdía las últimas 11 — justo donde suelen estar los ejercicios del
+// práctico. Ahora entra material largo y, si igual hay que cortar, se avisa.
+const MAX_PAGINAS_PDF = 400;
 async function extraerPDF(file){
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
   let texto='';
-  const maxPag=Math.min(pdf.numPages,50);
+  const maxPag=Math.min(pdf.numPages, MAX_PAGINAS_PDF);
   for(let i=1;i<=maxPag;i++){
     const pag=await pdf.getPage(i);
     const cont=await pag.getTextContent();
-    texto+=cont.items.map(it=>it.str).join(' ')+'\n';
+    texto+=`[Página ${i}] `+cont.items.map(it=>it.str).join(' ')+'\n';
   }
-  return texto.trim();
+  texto=texto.trim();
+  if(pdf.numPages>maxPag) texto+=`\n\n[⚠️ El archivo tiene ${pdf.numPages} páginas y solo se leyeron las primeras ${maxPag}.]`;
+  return texto;
 }
 async function extraerDocx(file){
   const buf=await file.arrayBuffer();
@@ -1871,6 +1878,10 @@ async function procesarArchivo(file, lista, repintar){
       if(nom.endsWith('.pptx')) throw new Error('Esta presentación no tiene texto legible: las diapositivas parecen ser imágenes. Subilas como fotos.');
       throw new Error('No encontré texto legible en el archivo.');
     }
+    // Si algún extractor tuvo que recortar, que se vea en la lista y no solo
+    // adentro del texto: un recorte silencioso ya nos costó dos versiones.
+    const mAviso=/\[⚠️ ([^\]]+)\]/.exec(item.texto);
+    if(mAviso) item.aviso=mAviso[1];
     item.estado='ok';
   }catch(e){
     item.estado='error';
@@ -1900,6 +1911,7 @@ function pintarLista(lista, contId, repintar){
       <span>${esc(a.nombre)}</span>
       ${a.estado==='leyendo'?'<span class="estado-a">leyendo…</span>':''}
       ${a.estado==='ok'?`<span class="estado-a">${(a.texto.length/1000).toFixed(1)}k caracteres</span>`:''}
+      ${a.estado==='ok'&&a.aviso?`<span class="estado-a recorte">⚠️ ${esc(a.aviso)}</span>`:''}
       ${a.estado==='error'?`<span class="estado-a">${esc(a.msg)}</span>`:''}
       ${a.estado!=='leyendo'?`<button class="quitar" data-i="${i}" aria-label="Quitar">✕</button>`:''}
     </div>`).join('');
