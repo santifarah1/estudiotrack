@@ -500,7 +500,7 @@ function espacioUsado(){
       }
     }
   }catch(e){}
-  return total*2;   // UTF-16: 2 bytes por caracter
+  return total*2 + MDB.bytes();   // UTF-16: 2 bytes por caracter, más las materias
 }
 function espacioUsadoMB(){ return espacioUsado()/1048576; }
 
@@ -581,7 +581,7 @@ function migrarExplicaciones(){
   try{
     const ms=J.get('et:materias',[]);
     ms.forEach(m=>{
-      const d=J.get('et:m:'+m.id,null);
+      const d=MDB.get(m.id);
       if(!d||!d.explicaciones) return;
       let cambio=false;
       Object.keys(d.explicaciones).forEach(nid=>{
@@ -592,17 +592,17 @@ function migrarExplicaciones(){
           cambio=true;
         }
       });
-      if(cambio) J.set('et:m:'+m.id, d);
+      if(cambio) MDB.set(m.id, d);
     });
   }catch(e){}
   st.set('et:mig-expl','1');
 }
-migrarExplicaciones();
+// (se llama en el arranque, después de cargar IndexedDB)
 
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.07b';
+const APP_VERSION = '2026.08.08a';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -749,7 +749,7 @@ async function importarPerfil(codigo, modo){
 
   if(modo==='reemplazar'){
     // borrar lo que hay antes de restaurar
-    materias.forEach(m=>st.del('et:m:'+m.id));
+    materias.forEach(m=>MDB.del(m.id));
     materias=[];
   }
 
@@ -1178,10 +1178,113 @@ let archivosSubidos = [];
 let parcialesSubidos = [];   // fotos de parciales/exámenes viejos (referencia de estilo)
 let repasoLibre = false;   // cuando está activo, todos los nodos se desbloquean y no se marca progreso
 
-function datosMateria(id){ return J.get('et:m:'+id, null); }
-function guardarMateria(id, datos){ J.set('et:m:'+id, datos); }
+
+/* =========================================================
+   ALMACÉN DE MATERIAS (IndexedDB con caché en memoria)
+
+   localStorage tope ~5 MB y las materias son lo único que pesa de verdad.
+   Pasan a IndexedDB, que no tiene ese techo.
+
+   La clave del diseño: NO se vuelve async media app. Al arrancar se cargan
+   TODAS las materias a un Map en memoria; datosMateria() lee de ahí y sigue
+   siendo sincrónica, y guardarMateria() escribe al Map (sincrónico) y dispara
+   la escritura a disco en segundo plano. Así el resto del código no cambia.
+
+   Si IndexedDB no está disponible (modo privado, navegador viejo), todo cae
+   de vuelta a localStorage y la app se comporta igual que antes.
+   ========================================================= */
+const MDB = {
+  db:null, cache:new Map(), usaIDB:false, fallosEscritura:0,
+
+  _abrir(){
+    return new Promise(res=>{
+      let idb=null;
+      try{ idb = window.indexedDB; }catch(e){ idb=null; }
+      if(!idb) return res(null);
+      let listo=false;
+      const t=setTimeout(()=>{ if(!listo){ listo=true; res(null); } }, 4000);
+      try{
+        const req=idb.open('estudiotrack', 1);
+        req.onupgradeneeded=()=>{
+          const d=req.result;
+          if(!d.objectStoreNames.contains('materias')) d.createObjectStore('materias');
+        };
+        req.onsuccess=()=>{ if(!listo){ listo=true; clearTimeout(t); res(req.result); } };
+        req.onerror=()=>{ if(!listo){ listo=true; clearTimeout(t); res(null); } };
+        req.onblocked=()=>{ if(!listo){ listo=true; clearTimeout(t); res(null); } };
+      }catch(e){ if(!listo){ listo=true; clearTimeout(t); res(null); } }
+    });
+  },
+  _tx(modo){ return this.db.transaction('materias', modo).objectStore('materias'); },
+  _pedido(req){ return new Promise((res,rej)=>{ req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error); }); },
+
+  async iniciar(){
+    this.db = await this._abrir();
+    this.usaIDB = !!this.db;
+    if(!this.usaIDB) return;                       // se sigue con localStorage
+    try{
+      const claves = await this._pedido(this._tx('readonly').getAllKeys());
+      const vals   = await this._pedido(this._tx('readonly').getAll());
+      claves.forEach((k,i)=>this.cache.set(String(k), vals[i]));
+    }catch(e){ this.db=null; this.usaIDB=false; return; }
+    await this._migrarDesdeLocal();
+  },
+
+  // Mueve lo que haya en localStorage. Solo borra el original DESPUÉS de
+  // confirmar que el dato se puede volver a leer desde IndexedDB.
+  async _migrarDesdeLocal(){
+    const lista = J.get('et:materias', []) || [];
+    for(const m of lista){
+      if(this.cache.has(m.id)) continue;
+      let crudo=null;
+      try{ crudo = localStorage.getItem('et:m:'+m.id); }catch(e){}
+      if(!crudo) continue;
+      let obj=null;
+      try{ obj = JSON.parse(crudo); }catch(e){ continue; }
+      try{
+        await this._pedido(this._tx('readwrite').put(obj, m.id));
+        const control = await this._pedido(this._tx('readonly').get(m.id));
+        if(!control) continue;                      // no se pudo: se deja el original
+        this.cache.set(m.id, obj);
+        localStorage.removeItem('et:m:'+m.id);      // recién ahora
+      }catch(e){ /* si falla, el dato sigue intacto en localStorage */ }
+    }
+  },
+
+  get(id){
+    if(this.cache.has(id)) return this.cache.get(id);
+    const d = J.get('et:m:'+id, null);              // por si quedó alguno sin migrar
+    if(d && this.usaIDB){ this.cache.set(id, d); this._escribir(id, d); }
+    return d;
+  },
+  set(id, datos){
+    this.cache.set(id, datos);
+    if(this.usaIDB) this._escribir(id, datos);
+    else J.set('et:m:'+id, datos);
+  },
+  del(id){
+    this.cache.delete(id);
+    try{ localStorage.removeItem('et:m:'+id); }catch(e){}
+    if(this.usaIDB){ try{ this._tx('readwrite').delete(id); }catch(e){} }
+  },
+  _escribir(id, datos){
+    try{
+      const req=this._tx('readwrite').put(datos, id);
+      req.onerror=()=>{ this.fallosEscritura++; try{ J.set('et:m:'+id, datos); }catch(e){} };
+    }catch(e){ this.fallosEscritura++; try{ J.set('et:m:'+id, datos); }catch(e){} }
+  },
+  // Cuánto ocupan las materias, estén donde estén.
+  bytes(){
+    let t=0;
+    this.cache.forEach(v=>{ try{ t+=JSON.stringify(v).length; }catch(e){} });
+    return t*2;
+  }
+};
+
+function datosMateria(id){ return MDB.get(id); }
+function guardarMateria(id, datos){ MDB.set(id, datos); }
 function borrarMateria(id){
-  st.del('et:m:'+id);
+  MDB.del(id);
   materias = materias.filter(m=>m.id!==id);
   J.set('et:materias', materias);
 }
@@ -2951,6 +3054,15 @@ async function renderRespaldo(err, aviso){
       </div>
       ${(()=>{
         const mb=espacioUsadoMB();
+        if(MDB.usaIDB){
+          // Con IndexedDB el techo lo pone el espacio libre del teléfono, no un
+          // límite fijo de 5 MB: mostrar un porcentaje sería inventar un número.
+          return `<div class="info-cuota">
+            <strong>💾 Espacio usado</strong>
+            ${mb.toFixed(2)} MB en ${materias.length} materia${materias.length===1?'':'s'}.
+            <br>Tus materias se guardan en IndexedDB, así que <strong>ya no tenés el tope de 5 MB</strong>: el límite es el espacio libre del dispositivo.
+          </div>`;
+        }
         const pct=Math.min(100, Math.round(mb/5*100));   // ~5MB es el límite típico
         const lleno=pct>=75;
         return `<div class="info-cuota${lleno?' alerta':''}">
@@ -3603,8 +3715,8 @@ function cabeceraHTML(m,d){
 // Si volvés a abrir un nodo, se regenera (gasta cuota, pero recuperás el espacio).
 function pesoMateria(mid){
   try{
-    const raw=localStorage.getItem('et:m:'+mid)||'';
-    return raw.length*2;   // bytes
+    const d=MDB.get(mid);
+    return d ? JSON.stringify(d).length*2 : 0;   // bytes
   }catch(e){ return 0; }
 }
 function archivarMateria(mid){
@@ -4602,10 +4714,14 @@ window.addEventListener('resize',()=>{
     if(vista.tipo==='leccion'||vista.tipo==='quiz'||vista.tipo==='camino') render();
   },200);
 });
-render();
-
-// al abrir: avisar si la racha está por cortarse
-setTimeout(avisarRacha, 1500);
+// Primero se carga IndexedDB (y se migra lo que quedara en localStorage), recién
+// después se dibuja: si se pintara antes, las materias se verían vacías un instante.
+(async ()=>{
+  try{ await MDB.iniciar(); }catch(e){}
+  try{ migrarExplicaciones(); }catch(e){}
+  render();
+  setTimeout(avisarRacha, 1500);   // avisar si la racha está por cortarse
+})();
 </script>
 </body>
 </html>
