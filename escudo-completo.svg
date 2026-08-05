@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <clipPath id="rec">
+      <path d="M256 62 C 314 86, 370 94, 402 96 L 402 250 C 402 342, 338 402, 256 444 C 174 402, 110 342, 110 250 L 110 96 C 142 94, 198 86, 256 62 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- laureles -->
+  <g fill="none" stroke="#C8A66A" stroke-width="8" stroke-linecap="round">
+    <path d="M104 286 C 76 344, 84 408, 146 444"/>
+    <path d="M408 286 C 436 344, 428 408, 366 444"/>
+  </g>
+  <g fill="#C8A66A">
+    <ellipse cx="80" cy="316" rx="21" ry="9.5" transform="rotate(-48 80 316)"/>
+    <ellipse cx="70" cy="356" rx="22" ry="9.5" transform="rotate(-22 70 356)"/>
+    <ellipse cx="73" cy="396" rx="22" ry="9.5" transform="rotate(4 73 396)"/>
+    <ellipse cx="93" cy="428" rx="21" ry="9.5" transform="rotate(30 93 428)"/>
+    <ellipse cx="124" cy="448" rx="20" ry="9" transform="rotate(52 124 448)"/>
+    <ellipse cx="116" cy="322" rx="17" ry="8" transform="rotate(30 116 322)"/>
+    <ellipse cx="110" cy="364" rx="17" ry="8" transform="rotate(52 110 364)"/>
+    <ellipse cx="120" cy="404" rx="17" ry="8" transform="rotate(72 120 404)"/>
+    <ellipse cx="432" cy="316" rx="21" ry="9.5" transform="rotate(48 432 316)"/>
+    <ellipse cx="442" cy="356" rx="22" ry="9.5" transform="rotate(22 442 356)"/>
+    <ellipse cx="439" cy="396" rx="22" ry="9.5" transform="rotate(-4 439 396)"/>
+    <ellipse cx="419" cy="428" rx="21" ry="9.5" transform="rotate(-30 419 428)"/>
+    <ellipse cx="388" cy="448" rx="20" ry="9" transform="rotate(-52 388 448)"/>
+    <ellipse cx="396" cy="322" rx="17" ry="8" transform="rotate(-30 396 322)"/>
+    <ellipse cx="402" cy="364" rx="17" ry="8" transform="rotate(-52 402 364)"/>
+    <ellipse cx="392" cy="404" rx="17" ry="8" transform="rotate(-72 392 404)"/>
+  </g>
+
+  <!-- escudo -->
+  <path d="M256 62 C 314 86, 370 94, 402 96 L 402 250 C 402 342, 338 402, 256 444 C 174 402, 110 342, 110 250 L 110 96 C 142 94, 198 86, 256 62 Z" fill="#0D1B34"/>
+
+  <g clip-path="url(#rec)">
+    <!-- camino: cuatro tramos que se van afinando hacia la cima -->
+    <g fill="none" stroke="#C8A66A" stroke-linecap="round">
+      <path d="M256 368 C 224 358, 224 340, 256 330" stroke-width="28"/>
+      <path d="M256 331 C 287 322, 287 305, 256 296" stroke-width="23"/>
+      <path d="M256 297 C 228 289, 228 273, 256 265" stroke-width="19"/>
+      <path d="M256 266 C 281 259, 281 245, 256 238" stroke-width="15"/>
+    </g>
+    <!-- estrella -->
+    <path d="M256 142 L 269 179 L 308 180 L 277 204 L 288 242 L 256 220 L 224 242 L 235 204 L 204 180 L 243 179 Z" fill="#C8A66A"/>
+    <!-- libro abierto -->
+    <path d="M256 364 C 236 351, 214 345, 196 347 C 190 348, 188 352, 190 358 L 202 396 C 204 401, 208 403, 214 403 C 230 403, 244 407, 256 414 Z" fill="#F7F4EF"/>
+    <path d="M256 364 C 276 351, 298 345, 316 347 C 322 348, 324 352, 322 358 L 310 396 C 308 401, 304 403, 298 403 C 282 403, 268 407, 256 414 Z" fill="#E7DCC6"/>
+    <path d="M256 364 L 256 414" stroke="#0D1B34" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <!-- bordes -->
+  <path d="M256 62 C 314 86, 370 94, 402 96 L 402 250 C 402 342, 338 402, 256 444 C 174 402, 110 342, 110 250 L 110 96 C 142 94, 198 86, 256 62 Z" fill="none" stroke="#C8A66A" stroke-width="12"/>
+  <path d="M256 84 C 310 106, 360 114, 386 116 L 386 248 C 386 330, 328 386, 256 424 C 184 386, 126 330, 126 248 L 126 116 C 152 114, 202 106, 256 84 Z" fill="none" stroke="#C8A66A" stroke-width="3" opacity=".5"/>
+</svg>
