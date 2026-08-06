@@ -602,7 +602,7 @@ function migrarExplicaciones(){
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.08a';
+const APP_VERSION = '2026.08.08b';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1502,7 +1502,11 @@ function fragmentoRelevante(apuntes, unidad, maxChars=18000){
   return elegidos.map(b=>apuntes.slice(b.i,b.i+BLOQUE)).join('\n[...]\n');
 }
 
-const TOPE_APUNTES = 400000;   // ~1.800 diapositivas o ~160 páginas de texto denso
+// Los 400k originales salían del techo de localStorage. Con IndexedDB ese motivo
+// desapareció. El límite que queda es el peso de cada pedido a Gemini: los apuntes
+// COMPLETOS viajan en cada generación de lección, así que más material = pedidos más
+// caros. 600k cubre un parcial con guías y filminas sin volverlos gigantes.
+const TOPE_APUNTES = 600000;   // ~2.700 diapositivas o ~240 páginas de texto corrido
 function recortar(txt, max=TOPE_APUNTES){
   txt = sanitizarTexto(txt);
   return txt.length>max ? txt.slice(0,max)+'\n[apuntes recortados]' : txt;
@@ -3605,6 +3609,7 @@ function renderNueva(err){
       const sobran=apuntes.length-TOPE_APUNTES;
       if(!confirm(
         `⚠️ Subiste ${(apuntes.length/1000).toFixed(0)}k caracteres de material y el máximo que puedo usar son ${(TOPE_APUNTES/1000).toFixed(0)}k.\n\n`+
+        `Si subiste la guía Y las filminas del mismo tema, probá con una sola: suelen decir lo mismo.\n\n`+
         `Van a quedar afuera los últimos ${(sobran/1000).toFixed(0)}k, o sea el FINAL del material. Si ahí están los ejercicios del práctico, no los voy a ver.\n\n`+
         `Aceptar = seguir igual con lo que entra\nCancelar = volver y sacar algún archivo`
       )) return;
