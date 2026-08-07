@@ -602,7 +602,7 @@ function migrarExplicaciones(){
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.08b';
+const APP_VERSION = '2026.08.09a';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1791,7 +1791,7 @@ Respondé SOLO con este JSON (sin markdown):
 }
 
 // Ejercicios prácticos de una unidad. La IA plantea, el JS calcula.
-function pPractica(m, apuntes, unidad, leccionTxt){
+function pPractica(m, apuntes, unidad, leccionTxt, parciales){
   const nodo=unidad.nodos.find(n=>n.tipo==='practica')||{titulo:unidad.titulo,temas:unidad.titulo};
   return `Sos un profesor universitario argentino de "${m.nombre}" armando la guía de ejercicios de la unidad "${unidad.titulo}".
 
@@ -1801,6 +1801,18 @@ ${recortar(apuntes)}
 ---
 ${leccionTxt?`\nLo que el estudiante YA estudió en esta unidad:\n---\n${leccionTxt.slice(0,4000)}\n---\n`:''}
 Tema de la práctica: "${nodo.titulo}" (${nodo.temas||unidad.titulo}).
+${(parciales&&parciales.trim())?`
+📄 PARCIALES ANTERIORES DE ESTE PROFESOR (referencia de estilo, MUY IMPORTANTE):
+Abajo van exámenes que este profesor ya tomó. Casi siempre traen una "PARTE PRÁCTICA" con ejercicios de cálculo. Mirá ESOS ejercicios y calcá su forma de evaluar:
+- Qué tipo de cuenta pide (mezclas, balances, conversiones de base seca a tal cual, aportes, costos, rendimientos).
+- Cómo presenta los datos: tablas con columnas a completar, valores sueltos en el enunciado, cuadros de laboratorio.
+- El nivel de detalle de la consigna y cuántos ítems tiene cada ejercicio.
+- Si mezcla la cuenta con una justificación conceptual al final.
+Si un ejercicio del parcial cae en el tema de ESTA unidad, armá uno del mismo tipo con datos distintos. NO lo copies textual: es para practicar, no para memorizar el resultado. Esos van con "origen":"propio", porque no están en los apuntes.
+---
+${recortar(parciales, 60000)}
+---
+`:''}
 ${nodo.ejercicios?`\n⭐ EJERCICIOS DEL PROFE QUE LE TOCAN A ESTA UNIDAD: ${nodo.ejercicios}\nBuscá esos enunciados en los apuntes y pasalos tal cual. Son los únicos que podés marcar "origen":"profe".\n`:`\n⚠️ Esta unidad NO tiene ejercicios del profe asignados: todos los que generes son inventados por vos y van con "origen":"propio". Ni uno solo puede decir "profe".\n`}
 
 ⛔ REGLA CENTRAL — VOS NO HACÉS LAS CUENTAS:
@@ -3991,7 +4003,8 @@ async function abrirNodo(mid, nid, forzarNuevo){
         // y meterle 5 ejercicios más lo haría reventar por largo.
         apuntesTxt = apuntesTxt ?? await apuntesDe(d);
         const lecTxt=leccionContexto(d, ui)||'';
-        const cont=await iaJSON(pPractica(m,apuntesTxt,unidad,lecTxt),8192,false,forzarNuevo?0.9:0.5);
+        parcialesTxt = parcialesTxt ?? await parcialesDe(d);
+        const cont=await iaJSON(pPractica(m,apuntesTxt,unidad,lecTxt,parcialesTxt),8192,false,forzarNuevo?0.9:0.5);
         const buenos=(cont.ejercicios||[]).map(prepararEjercicio).filter(Boolean);
         if(!buenos.length) throw new Error('Los ejercicios vinieron con las fórmulas rotas. Probá de nuevo.');
         // Red de seguridad: si el plan no le asignó ejercicios del profe a esta unidad,
