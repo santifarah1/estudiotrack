@@ -602,7 +602,7 @@ function migrarExplicaciones(){
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.09a';
+const APP_VERSION = '2026.08.09b';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1801,19 +1801,20 @@ ${recortar(apuntes)}
 ---
 ${leccionTxt?`\nLo que el estudiante YA estudió en esta unidad:\n---\n${leccionTxt.slice(0,4000)}\n---\n`:''}
 Tema de la práctica: "${nodo.titulo}" (${nodo.temas||unidad.titulo}).
-${(parciales&&parciales.trim())?`
-📄 PARCIALES ANTERIORES DE ESTE PROFESOR (referencia de estilo, MUY IMPORTANTE):
-Abajo van exámenes que este profesor ya tomó. Casi siempre traen una "PARTE PRÁCTICA" con ejercicios de cálculo. Mirá ESOS ejercicios y calcá su forma de evaluar:
-- Qué tipo de cuenta pide (mezclas, balances, conversiones de base seca a tal cual, aportes, costos, rendimientos).
-- Cómo presenta los datos: tablas con columnas a completar, valores sueltos en el enunciado, cuadros de laboratorio.
-- El nivel de detalle de la consigna y cuántos ítems tiene cada ejercicio.
-- Si mezcla la cuenta con una justificación conceptual al final.
-Si un ejercicio del parcial cae en el tema de ESTA unidad, armá uno del mismo tipo con datos distintos. NO lo copies textual: es para practicar, no para memorizar el resultado. Esos van con "origen":"propio", porque no están en los apuntes.
+
+${nodo.ejercicios?`\n⭐ EJERCICIOS DEL PROFE QUE LE TOCAN A ESTA UNIDAD: ${nodo.ejercicios}\nBuscá esos enunciados en los apuntes y pasalos tal cual. Son los únicos que podés marcar "origen":"profe".\n`:`\n⚠️ Esta unidad NO tiene ejercicios del profe asignados: todos los que generes son inventados por vos y van con "origen":"propio". Ni uno solo puede decir "profe".\n`}${(parciales&&parciales.trim())?`
+📄 PARCIALES VIEJOS DE ESTE PROFESOR — SOLO PARA LA FORMA, NO PARA EL CONTENIDO:
+Abajo van exámenes que este profesor ya tomó. NO son una segunda fuente de ejercicios y NO compiten con los de arriba: los de los apuntes siempre van primero y completos.
+Lo único que sacás de acá es el MOLDE de los ejercicios que tengas que inventar para completar:
+- Qué tipo de cuenta suele pedir (mezclas, balances, conversiones de base seca a tal cual, aportes, costos, rendimientos).
+- Cómo presenta los datos: tablas con celdas a completar, valores sueltos en el enunciado, cuadros de laboratorio.
+- Cuántos ítems tiene cada consigna y si cierra con una justificación conceptual.
+⛔ Los DATOS y los valores de referencia siguen saliendo de los apuntes, nunca del parcial: del parcial se copia la forma de preguntar, no los números.
+⛔ Nada de lo que salga de acá puede llevar "origen":"profe". Estos ejercicios no están en los apuntes: van todos "propio".
 ---
 ${recortar(parciales, 60000)}
 ---
 `:''}
-${nodo.ejercicios?`\n⭐ EJERCICIOS DEL PROFE QUE LE TOCAN A ESTA UNIDAD: ${nodo.ejercicios}\nBuscá esos enunciados en los apuntes y pasalos tal cual. Son los únicos que podés marcar "origen":"profe".\n`:`\n⚠️ Esta unidad NO tiene ejercicios del profe asignados: todos los que generes son inventados por vos y van con "origen":"propio". Ni uno solo puede decir "profe".\n`}
 
 ⛔ REGLA CENTRAL — VOS NO HACÉS LAS CUENTAS:
 No resuelvas nada de aritmética. Escribí el PLANTEO como fórmulas y la app las va a calcular sola. Vos ponés los datos y la fórmula; el número exacto lo saca el programa. Esto es obligatorio: un número mal sumado le arruina el estudio al estudiante.
@@ -1824,10 +1825,10 @@ Si arriba te pasé una lista de ejercicios del profe para esta unidad, buscá ca
 - Si un ejercicio del profe termina en una consigna de análisis o discusión que no se resuelve con números ("discuta el impacto…", "¿qué perfil de riesgo…?"), ese ítem va como tipo "concepto" con su respuesta modelo. No lo tires.
 - Si un ejercicio del profe toca varios temas, incluilo igual mientras el grueso sea de esta unidad.
 Recién DESPUÉS de haber pasado todos los del profe, si quedaron menos de 3, completá con ejercicios propios en el mismo estilo y marcalos "origen":"propio".
-Si esta unidad no tiene ningún ejercicio del profe, inventá 3 en el estilo del material, todos "origen":"propio".
+Si esta unidad no tiene ningún ejercicio del profe, inventá 3 con datos del material, todos "origen":"propio" (si hay parciales viejos, con el molde de consigna que usa ese profesor).
 
 Generá entre 2 y 5 ejercicios en total (los del profe van primero y completos). Reglas:
-1) SALEN DE LOS APUNTES. Usá los valores de referencia que aparecen en el material (m² por animal, cm de comedero, precios, dosis, porcentajes, etc.), no valores inventados.
+1) LOS DATOS SALEN DE LOS APUNTES. Usá los valores de referencia que aparecen en el material (m² por animal, cm de comedero, precios, dosis, porcentajes, etc.), no valores inventados. Esto vale también para los que armes imitando un parcial viejo: del parcial se toma la forma de la consigna, los números salen del material.
 2) Cada ejercicio tiene un ENUNCIADO con contexto realista y una lista de DATOS. Cada dato lleva un "nombre" corto en minúscula sin espacios ni tildes (ej: superficie, m2_animal, costo_tramo) que es el que vas a usar en las fórmulas.
 3) Cada ejercicio se divide en ÍTEMS con id "a", "b", "c"… Un ítem puede usar el resultado de uno anterior escribiendo su id en la fórmula (ej: "a * costo_tramo").
 4) Ítems numéricos (tipo "numerico"): "pasos" es la resolución paso a paso. Cada paso tiene "texto" (qué se hace y POR QUÉ, en criollo, 1 oración) y "expr" (la fórmula). El resultado del ítem es el valor del ÚLTIMO paso.
