@@ -602,7 +602,7 @@ function migrarExplicaciones(){
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.09b';
+const APP_VERSION = '2026.08.10a';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1599,12 +1599,18 @@ Cada unidad tiene que tratar UN solo tema que se pueda explicar bien en una lecc
 - BIEN: "Maíz" una unidad, "Arroz" otra, "Soja" otra, "Girasol" otra. Cada cultivo o tema grande, su propia unidad.
 Si dos temas tienen tecnologías, datos o procesos diferentes, van en unidades SEPARADAS. Es mejor tener muchas unidades chicas y enfocadas que pocas unidades que mezclan todo: así la lección cubre bien el tema y las preguntas no se van a cosas que no se explicaron.
 
-Dividí el material en tantas unidades como haga falta para que cada una sea UN tema bien acotado (típicamente entre 6 y 15, pero si el material lo pide pueden ser más). Ordenalas de forma lógica para estudiar. Cada unidad DEBE tener al menos 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
+📑 SI EL MATERIAL YA VIENE ESTRUCTURADO, USÁ SU ESTRUCTURA:
+Muchos apuntes traen su propia división en títulos, capítulos, "PARTE 1 / PARTE 2", "BLOQUE 1 / BLOQUE 2", secciones numeradas o un índice al principio. Cuando eso existe, NO inventes una división propia: **cada bloque o sección del material es una unidad**. El autor ya separó los temas por vos y lo hizo mejor, porque conoce la materia.
+Ejemplo: si el material dice "CLASE 2 — BLOQUE 3: AGUA", "BLOQUE 4: ENERGÍA", "BLOQUE 5: FIBRA", "BLOQUE 6: PROTEÍNA", eso son CUATRO unidades, no una unidad llamada "Nutrición". Agua, energía, fibra y proteína son temas distintos, con datos distintos y preguntas distintas.
+Podés unir dos bloques solo si son muy cortos y del mismo tema. NUNCA juntes cinco bloques en una unidad.
+⛔ Un error grave y frecuente: agarrar un apunte de 4 clases con 30 bloques y devolver 7 unidades. Si el material tiene 30 secciones propias, el plan tiene que tener del orden de 20 a 30 unidades, no 7. Fijate cuántas secciones hay ANTES de decidir cuántas unidades vas a hacer.
+
+Dividí el material en tantas unidades como haga falta para que cada una sea UN tema bien acotado (típicamente entre 6 y 15 si el material es corto, y 20 a 35 si son varias clases juntas). Ordenalas de forma lógica para estudiar. Cada unidad DEBE tener al menos 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
 
 🧮 NODO DE PRÁCTICA: si el tema de una unidad se resuelve con cuentas (superficies, costos, dosis, densidades, rendimientos, porcentajes aplicados), agregale un TERCER nodo tipo "practica" después del quiz. Las unidades puramente conceptuales (definiciones, historia, clasificaciones, ventajas y desventajas) van con 2 nodos. La "Recta final" nunca lleva práctica.
 De los ejercicios que pueda traer el material no te ocupes acá: eso lo pregunto aparte.
 
-Respondé SOLO con este JSON (sin texto antes ni después). Agregá tantas unidades como haga falta para que cada una sea UN tema acotado (normalmente 6 a 15, más la Recta final). Antes mezclabas temas para que entraran pocas unidades: NO lo hagas, preferí más unidades y más chicas:
+Respondé SOLO con este JSON (sin texto antes ni después). Agregá tantas unidades como haga falta para que cada una sea UN tema acotado, siguiendo los bloques del material, más la Recta final. Antes mezclabas temas para que entraran pocas unidades: NO lo hagas, preferí más unidades y más chicas:
 {"unidades":[
 {"titulo":"Nombre del tema 1","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
 {"titulo":"Nombre del tema 2","nodos":[{"tipo":"leccion","titulo":"...","temas":"..."},{"tipo":"quiz","titulo":"...","temas":"..."}]},
@@ -1671,7 +1677,8 @@ function armarPracticas(p){
         nodo={tipo:'practica',titulo:'Ejercicios de '+u.titulo,temas:u.titulo};
         u.nodos=u.nodos||[]; u.nodos.push(nodo);   // siempre después del quiz
       }
-      nodo.ejercicios=ejs.map(e=>`Ejercicio ${e.n}${e.titulo?' ('+e.titulo+')':''}`).join(', ');
+      // el "· ya resuelto" le avisa a pPractica que puede copiar el método del profe
+      nodo.ejercicios=ejs.map(e=>`Ejercicio ${e.n}${e.titulo?' ('+e.titulo+')':''}${e.resuelto?' · ya resuelto en los apuntes':''}`).join(', ');
     });
   }catch(e){}
   return p;
@@ -1774,19 +1781,21 @@ ${titulos.map((t,i)=>`${i+1}. ${t}`).join('\n')}
 QUÉ BUSCAR: casi todo el material universitario trae una tanda de ejercicios, generalmente AL FINAL, después de toda la teoría. Recorré el material de punta a punta, especialmente las últimas páginas o diapositivas.
 Un ejercicio de verdad tiene las tres cosas: (1) un enunciado que plantea un caso concreto, (2) datos numéricos propios de ese caso, (3) una consigna que le pide algo al estudiante ("calcule", "determine", "estime", "¿cuántos…?", "¿a cuánto asciende…?", "¿en cuántos meses se recupera…?"). Casi siempre vienen numerados y con ítems a) b) c).
 
+✅ TAMBIÉN CUENTAN LOS EJERCICIOS RESUELTOS: si el material trae una sección tipo "EJERCICIOS RESUELTOS", "Ejercicios de la clase", "Problemas resueltos" o "Práctica" con el enunciado Y su resolución, esos van en la lista igual. Son valiosos justamente porque muestran el método del profesor. Marcalos con "resuelto":true.
+
 ⛔ NO son ejercicios y NO van en la lista:
 - Una lámina de teoría que muestra números o un gráfico con valores.
 - Una tabla de referencia (densidades, dosis, precios).
-- Un ejemplo ya resuelto dentro de una explicación.
-Si no hay una consigna dirigida al estudiante, no es un ejercicio. Lista vacía es una respuesta perfectamente válida y mucho mejor que una lista inventada.
+- Un ejemplo numérico suelto en medio de una explicación teórica, que NO está en una sección de ejercicios.
+La diferencia: un ejercicio (resuelto o no) plantea un caso con su enunciado propio; un ejemplo suelto ilustra un párrafo de teoría. Lista vacía es una respuesta perfectamente válida y mucho mejor que una lista inventada.
 
 A QUÉ UNIDAD VA CADA UNO: por lo que el ejercicio PIDE, no por dónde está escrito. Están casi todos juntos al final, pero cada uno es de un tema distinto: uno sobre metros lineales de comedero va a la unidad de instalaciones aunque esté en la última página; uno sobre alquilarle corrales a un tercero va a la de modelos de negocio; uno sobre superficie por animal va a la de diseño.
 Si el material trae 5, 6 o 7 ejercicios es imposible que sean todos del mismo tema: repartilos entre las unidades que correspondan.
 
 Respondé SOLO con este JSON (sin markdown):
 {"ejercicios":[
-{"n":1,"titulo":"título corto del ejercicio (máx 8 palabras)","unidad":"título exacto de la unidad de la lista"},
-{"n":2,"titulo":"...","unidad":"..."}
+{"n":1,"titulo":"título corto del ejercicio (máx 8 palabras)","unidad":"título exacto de la unidad de la lista","resuelto":false},
+{"n":2,"titulo":"...","unidad":"...","resuelto":true}
 ]}`;
 }
 
@@ -1802,7 +1811,8 @@ ${recortar(apuntes)}
 ${leccionTxt?`\nLo que el estudiante YA estudió en esta unidad:\n---\n${leccionTxt.slice(0,4000)}\n---\n`:''}
 Tema de la práctica: "${nodo.titulo}" (${nodo.temas||unidad.titulo}).
 
-${nodo.ejercicios?`\n⭐ EJERCICIOS DEL PROFE QUE LE TOCAN A ESTA UNIDAD: ${nodo.ejercicios}\nBuscá esos enunciados en los apuntes y pasalos tal cual. Son los únicos que podés marcar "origen":"profe".\n`:`\n⚠️ Esta unidad NO tiene ejercicios del profe asignados: todos los que generes son inventados por vos y van con "origen":"propio". Ni uno solo puede decir "profe".\n`}${(parciales&&parciales.trim())?`
+${nodo.ejercicios?`\n⭐ EJERCICIOS DEL PROFE QUE LE TOCAN A ESTA UNIDAD: ${nodo.ejercicios}\nBuscá esos enunciados en los apuntes y pasalos tal cual. Son los únicos que podés marcar "origen":"profe".
+📐 Si alguno viene YA RESUELTO en los apuntes, mejor todavía: copiá el enunciado igual y armá los "pasos" siguiendo EL MÉTODO DEL PROFESOR, el mismo orden y las mismas fórmulas que usó él. Es lo que va a esperar en el parcial. La resolución no se muestra hasta que el estudiante intenta, así que no arruina nada.\n`:`\n⚠️ Esta unidad NO tiene ejercicios del profe asignados: todos los que generes son inventados por vos y van con "origen":"propio". Ni uno solo puede decir "profe".\n`}${(parciales&&parciales.trim())?`
 📄 PARCIALES VIEJOS DE ESTE PROFESOR — SOLO PARA LA FORMA, NO PARA EL CONTENIDO:
 Abajo van exámenes que este profesor ya tomó. NO son una segunda fuente de ejercicios y NO compiten con los de arriba: los de los apuntes siempre van primero y completos.
 Lo único que sacás de acá es el MOLDE de los ejercicios que tengas que inventar para completar:
