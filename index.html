@@ -602,7 +602,7 @@ function migrarExplicaciones(){
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.10a';
+const APP_VERSION = '2026.08.10b';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1599,11 +1599,15 @@ Cada unidad tiene que tratar UN solo tema que se pueda explicar bien en una lecc
 - BIEN: "Maíz" una unidad, "Arroz" otra, "Soja" otra, "Girasol" otra. Cada cultivo o tema grande, su propia unidad.
 Si dos temas tienen tecnologías, datos o procesos diferentes, van en unidades SEPARADAS. Es mejor tener muchas unidades chicas y enfocadas que pocas unidades que mezclan todo: así la lección cubre bien el tema y las preguntas no se van a cosas que no se explicaron.
 
-📑 SI EL MATERIAL YA VIENE ESTRUCTURADO, USÁ SU ESTRUCTURA:
-Muchos apuntes traen su propia división en títulos, capítulos, "PARTE 1 / PARTE 2", "BLOQUE 1 / BLOQUE 2", secciones numeradas o un índice al principio. Cuando eso existe, NO inventes una división propia: **cada bloque o sección del material es una unidad**. El autor ya separó los temas por vos y lo hizo mejor, porque conoce la materia.
-Ejemplo: si el material dice "CLASE 2 — BLOQUE 3: AGUA", "BLOQUE 4: ENERGÍA", "BLOQUE 5: FIBRA", "BLOQUE 6: PROTEÍNA", eso son CUATRO unidades, no una unidad llamada "Nutrición". Agua, energía, fibra y proteína son temas distintos, con datos distintos y preguntas distintas.
-Podés unir dos bloques solo si son muy cortos y del mismo tema. NUNCA juntes cinco bloques en una unidad.
-⛔ Un error grave y frecuente: agarrar un apunte de 4 clases con 30 bloques y devolver 7 unidades. Si el material tiene 30 secciones propias, el plan tiene que tener del orden de 20 a 30 unidades, no 7. Fijate cuántas secciones hay ANTES de decidir cuántas unidades vas a hacer.
+${(()=>{const e=esquemaDe(apuntes); if(e.length<4) return '';
+return `📑 SECCIONES QUE TRAE EL MATERIAL (${e.length}) — ESTA ES TU DIVISIÓN:
+${e.map((t,i)=>`${i+1}. ${t}`).join('\n')}
+
+El autor ya separó los temas y lo hizo mejor que cualquier división que inventes: conoce la materia. Salvo excepción, **cada sección de esa lista es una unidad**, en ese mismo orden.
+Podés unir dos SOLO si son muy cortas y del mismo tema; podés saltear una que sea puro índice o portada. Nada más.
+⛔ Con ${e.length} secciones, un plan de 7 u 8 unidades está MAL: significa que metiste cinco temas distintos en una misma unidad. Apuntá a algo cercano a ${e.length} unidades.
+⛔ No dejes ninguna sección afuera. Si una sección de la lista no aparece en ninguna unidad, el estudiante nunca va a estudiar ese tema.`;})()}
+📑 Si el material NO trae secciones propias, dividilo vos: cada unidad, UN tema bien acotado. NUNCA juntes cinco temas en una unidad.
 
 Dividí el material en tantas unidades como haga falta para que cada una sea UN tema bien acotado (típicamente entre 6 y 15 si el material es corto, y 20 a 35 si son varias clases juntas). Ordenalas de forma lógica para estudiar. Cada unidad DEBE tener al menos 2 nodos: primero uno tipo "leccion" y después uno tipo "quiz". Al final agregá una unidad extra llamada "Recta final" con un único nodo tipo "simulacro".
 
@@ -1955,10 +1959,42 @@ async function extraerPDF(file){
   if(pdf.numPages>maxPag) texto+=`\n\n[⚠️ El archivo tiene ${pdf.numPages} páginas y solo se leyeron las primeras ${maxPag}.]`;
   return texto;
 }
+// extractRawText tiraba los títulos: un Word con "BLOQUE 4 — ENERGÍA" como encabezado
+// llegaba como una línea suelta más, y nadie podía saber que era el título de una
+// sección. Se pasa por HTML para conservar la jerarquía como # / ## / ###.
 async function extraerDocx(file){
   const buf=await file.arrayBuffer();
-  const res=await mammoth.extractRawText({arrayBuffer:buf});
-  return res.value.trim();
+  let html='';
+  try{ html=(await mammoth.convertToHtml({arrayBuffer:buf})).value||''; }catch(e){ html=''; }
+  if(!html){                                   // si falla, el método de antes
+    const res=await mammoth.extractRawText({arrayBuffer:buf});
+    return res.value.trim();
+  }
+  let t=html
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi,   (m,x)=>'\n\n# '+x+'\n')
+    .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi,   (m,x)=>'\n\n## '+x+'\n')
+    .replace(/<h[3-6][^>]*>([\s\S]*?)<\/h[3-6]>/gi,(m,x)=>'\n\n### '+x+'\n')
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi,   (m,x)=>'\n- '+x)
+    .replace(/<\/(p|div|tr)>/gi,'\n')
+    .replace(/<\/t[dh]>/gi,' | ')
+    .replace(/<br\s*\/?>/gi,'\n')
+    .replace(/<[^>]+>/g,'');
+  const e=document.createElement('textarea'); e.innerHTML=t; t=e.value;   // &amp; y compañía
+  return t.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+
+// Títulos de primer y segundo nivel del material. Sirven como candidatos a unidad:
+// el autor ya dividió los temas y lo hizo mejor que cualquier división inventada.
+function esquemaDe(texto){
+  const out=[];
+  String(texto||'').split('\n').forEach(l=>{
+    const m=/^(#{1,2})\s+(.{3,110}?)\s*$/.exec(l.trim());
+    if(m){
+      const t=m[2].replace(/\s+/g,' ').trim();
+      if(t && !/^(índice|indice|contenido|bibliograf)/i.test(t) && !out.includes(t)) out.push(t);
+    }
+  });
+  return out;
 }
 async function extraerPptx(file){
   const zip=await JSZip.loadAsync(await file.arrayBuffer());
