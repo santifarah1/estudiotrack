@@ -192,6 +192,8 @@
   .estado-motor .punto-a{width:9px;height:9px;border-radius:50%;background:#E8A93D;flex-shrink:0}
   .dropzone{border:2px dashed #C9CFDC;border-radius:12px;background:var(--papel);padding:18px 14px;text-align:center;cursor:pointer;font-size:14px;color:var(--tenue)}
   .dropzone.arrastrando{border-color:var(--tinta);background:var(--oro-suave)}
+  .check-linea{display:flex;align-items:center;gap:9px;margin:14px 0 2px;font-weight:600;cursor:pointer}
+  .check-linea input{width:18px;height:18px;flex:none;accent-color:var(--tinta);cursor:pointer}
   .dropzone strong{color:var(--tinta)}
   .dropzone input{display:none}
   .archivos{margin-top:8px}
@@ -602,7 +604,7 @@ function migrarExplicaciones(){
 /* Versión de la app. Al cambiarla, el service worker se registra con una URL
    distinta y el navegador detecta la actualización automáticamente.
    Se muestra en Ajustes para poder verificar qué versión tiene cada uno. */
-const APP_VERSION = '2026.08.10b';
+const APP_VERSION = '2026.08.11a';
 
 /* ---------- estado global ---------- */
 // Tema: 'auto' sigue al sistema, o 'claro'/'oscuro' forzado
@@ -1645,6 +1647,14 @@ async function mapearEjercicios(m, apuntes, plan){
 // la IA solo dice QUÉ ejercicio es de QUÉ unidad (trabajo semántico) y acá se
 // hace la contabilidad (trabajo determinístico). Antes se le pedían las dos
 // cosas y se olvidaba de la segunda.
+// Saca todos los nodos de práctica del plan. Para materias donde el usuario
+// prefiere estudiar los ejercicios por su cuenta.
+function quitarPractica(p){
+  ((p&&p.unidades)||[]).forEach(u=>{
+    if(u&&Array.isArray(u.nodos)) u.nodos=u.nodos.filter(n=>n.tipo!=='practica');
+  });
+  return p;
+}
 function armarPracticas(p){
   try{
     const lista=((p&&p.ejercicios)||[]).filter(e=>e&&e.n!=null);
@@ -3608,6 +3618,9 @@ function renderNueva(err){
       </select>
       <p class="hint">Las preguntas a desarrollar se parecen más a un final oral o escrito: escribís tu respuesta y la IA te dice qué te faltó.</p>
 
+      <label class="check-linea"><input type="checkbox" id="conPractica" checked> Incluir ejercicios de práctica 🧮</label>
+      <p class="hint">Los nodos de práctica te hacen resolver cuentas (superficies, costos, dosis). Si preferís practicar los cálculos por tu cuenta, destildá esto y el camino queda solo con lecciones y quizzes.</p>
+
       <label>Tus apuntes</label>
       <div class="dropzone" id="dz">
         <strong>Subí tus resúmenes</strong> — PDF, Word, PowerPoint, texto o fotos de apuntes<br>
@@ -3676,18 +3689,24 @@ function renderNueva(err){
     vista={tipo:'generando',msg:'Leyendo tus apuntes y armando el plan…'};render();
     try{
       const estilo=(document.getElementById('estilo')||{}).value||'mc';
-      const m={id:'m'+Date.now(),nombre,fecha,objetivo,estilo,tieneParciales:!!parciales};
+      const conPractica=(document.getElementById('conPractica')||{checked:true}).checked;
+      const m={id:'m'+Date.now(),nombre,fecha,objetivo,estilo,tieneParciales:!!parciales,sinPractica:!conPractica};
       let plan=null;
       for(let intentoPlan=0;intentoPlan<3;intentoPlan++){
         const p=normalizarPlan(await iaJSON(pPlan(m,apuntes),8192,true));
+        if(m.sinPractica) quitarPractica(p);
         const unidades=(p&&p.unidades)||[];
         const conNodos=unidades.filter(u=>u.nodos&&u.nodos.length);
         if(unidades.length>=3 && conNodos.length>=3){ plan=p; break; }
       }
       if(!plan) throw new Error('La IA armó un plan demasiado corto. Reintentá, o subí apuntes con un poco más de contenido.');
-      // segundo pedido: los ejercicios del práctico y a qué unidad va cada uno
-      vista={tipo:'generando',msg:'Buscando los ejercicios prácticos del material…'};render();
-      const ejDetectados=await mapearEjercicios(m, apuntes, plan);
+      // segundo pedido: los ejercicios del práctico y a qué unidad va cada uno.
+      // Si el usuario no quiere práctica, ni se pide: se ahorra una llamada.
+      let ejDetectados=[];
+      if(!m.sinPractica){
+        vista={tipo:'generando',msg:'Buscando los ejercicios prácticos del material…'};render();
+        ejDetectados=await mapearEjercicios(m, apuntes, plan);
+      }
       materias.push(m);
       J.set('et:materias',materias);
       const apuntesComp=await comprimirTexto(recortar(apuntes));
@@ -3856,8 +3875,12 @@ function wireCamino(m,d){
     try{
       const plan=normalizarPlan(await iaJSON(pPlan(m, apuntes), 8192));
       if(!plan || !plan.unidades || !plan.unidades.length) throw new Error('El plan vino vacío. Reintentá.');
-      vista={tipo:'generando',msg:'Buscando los ejercicios prácticos del material…'};render();
-      const ejDetectados=await mapearEjercicios(m, apuntes, plan);
+      if(m.sinPractica) quitarPractica(plan);
+      let ejDetectados=[];
+      if(!m.sinPractica){
+        vista={tipo:'generando',msg:'Buscando los ejercicios prácticos del material…'};render();
+        ejDetectados=await mapearEjercicios(m, apuntes, plan);
+      }
       const d2=datosMateria(m.id);
       d2.plan=plan;
       d2.ejerciciosDetectados=ejDetectados;
@@ -4298,6 +4321,7 @@ function renderPractica(){
             <input type="text" inputmode="decimal" data-k="${k}" placeholder="Tu resultado">
             ${it.unidad?`<span class="ej-uni">${esc(it.unidad)}</span>`:''}
             <button class="ej-btn principal verificar" data-k="${k}" data-ej="${ei}" data-it="${esc(it.id)}">Verificar</button>
+            <button class="ej-btn como" data-k="${k}" data-ej="${ei}" data-it="${esc(it.id)}">Cómo se hace</button>
           </div>
           <div class="ej-fb" id="fb-${k}"></div>
         </div>`;
@@ -4399,6 +4423,25 @@ function renderPractica(){
         try{ inp.focus(); inp.select(); }catch(e){}
         const r=caja.querySelector('.rendirse');
         if(r) r.onclick=()=>cerrar(`<div class="ej-veredicto mal">El resultado es <strong>${fmtNum(correcto,dec)}${uni}</strong>.</div>`);
+      };
+    });
+
+    $app.querySelectorAll('.como').forEach(btn=>{
+      btn.onclick=()=>{
+        const ei=+btn.dataset.ej, itId=btn.dataset.it, k=btn.dataset.k;
+        const ej=ejs[ei], calc=calcs[ei];
+        const it=ej.items.find(x=>x.id===itId);
+        const caja=document.getElementById('fb-'+k);
+        if(!it||!calc||!caja) return;
+        const correcto=calc[it.id].valor, dec=it.decimales, uni=it.unidad?' '+esc(it.unidad):'';
+        caja.innerHTML=`<div class="ej-pasos">
+          <div class="pt">Cómo se resuelve este tipo</div>
+          ${calc[it.id].pasos.map((p,pi)=>`<div class="ej-paso">${pi+1}. ${esc(p.texto)}<span class="cuenta">${esc(p.cuenta||p.expr)} = ${fmtNum(p.valor,null)}</span></div>`).join('')}
+          <div class="ej-final">= ${fmtNum(correcto,dec)}${uni}</div>
+        </div>`;
+        const inp=$app.querySelector(`input[data-k="${k}"]`); if(inp) inp.disabled=true;
+        const v=$app.querySelector(`.verificar[data-k="${k}"]`); if(v) v.remove();
+        btn.remove();
       };
     });
 
